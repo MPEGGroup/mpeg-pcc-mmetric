@@ -157,14 +157,6 @@ class Geometry {
     maxPos = glm::max( maxPosA, maxPosB );
   }
 
-  // transform the box into a cube bbox fitting original
-  static inline void toCubicalBBox( glm::vec3& minPos, glm::vec3& maxPos ) {
-    float low  = std::min( std::min( minPos.x, minPos.y ), minPos.z );
-    float high = std::max( std::max( maxPos.x, maxPos.y ), maxPos.z );
-    minPos.x = minPos.y = minPos.z = low;
-    maxPos.x = maxPos.y = maxPos.z = high;
-  }
-
   // Compute barycentric coordinates (u, v, w)~res(x,y,z) for
   // point p with respect to triangle (a, b, c)
   // return true if point is inside the triangle

@@ -205,9 +205,11 @@ void Sample::meshToPcGrid( const Model& input,
       std::cout << "Transform bounding box to square box" << std::endl;
     }
     // hence sampling will be unform in the three dimensions
-    Geometry::toCubicalBBox(
-      minBox, maxBox );  // this will change the origin of the coordinate system (but it is just a translation)
-    stepSize = ( maxBox - minBox ) * ( 1.0F / (float)( resolution - 1 ) );
+    const glm::vec3 diag = maxBox - minBox;
+    float           range = std::max(std::max(diag.x, diag.y), diag.z);
+    stepSize[0] = range * (1.0F / (float)(resolution - 1));
+    stepSize[1] = range * (1.0F / (float)(resolution - 1));
+    stepSize[2] = range * (1.0F / (float)(resolution - 1));
   } else {
     if ( verbose ) {
       std::cout << "Using parameter positions range" << std::endl;
