@@ -39,6 +39,10 @@ class CmdCompare : Command {
   float _equEpsilon     = 0;
   bool  _equEarlyReturn = true;
   bool  _equUnoriented  = false;
+  // EqTFAN options
+  float _eqTFANEpsilon = 0;
+  bool  _eqTFANEarlyReturn = true;
+  bool  _eqTFANUnoriented = false;
   // Topo options
   std::string _topoFaceMapFilename;
   std::string _topoVertexMapFilename;

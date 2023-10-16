@@ -86,6 +86,15 @@ class Compare {
            mm::Model&       outputA,
            mm::Model&       outputB );
 
+  int eqTFAN(mm::Model& modelA,
+             mm::Model& modelB,
+      const mm::Image& mapA,
+      const mm::Image& mapB,
+      float            epsilon,
+      bool             earlyReturn,
+      bool             unoriented,
+      mm::Model& outputA,
+      mm::Model& outputB);
   // compare two meshes topology for equivalence up to face index shift
   // check topology will use a bijective face map, associating output triangles to input triangles:
   // - faceMap file shall contain the association dest face index -> orig face index for each face, one face per line

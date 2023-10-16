@@ -77,7 +77,6 @@ class Model {
   std::vector<float>       faceNormals;  // per triangle normals (x,y,z)
   std::vector<int>         triangles;    // triangle position indices
   std::vector<int>         trianglesuv;  // triangle uv indices
-
   // topology/neighborhood information
   // set of triangle associated with a vertex index (the key)
   std::map<size_t, std::set<size_t>> perVertexTriangles;

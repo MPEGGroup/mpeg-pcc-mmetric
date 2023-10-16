@@ -9,6 +9,7 @@ tests=(
 "test-help"
 "test-analyse"
 "test-compare-eq" 
+"test-compare-eqTFAN" 
 "test-compare-topo"
 "test-compare-pcc"
 "test-compare-ibsm"

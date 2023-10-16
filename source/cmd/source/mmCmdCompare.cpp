@@ -80,7 +80,7 @@ bool CmdCompare::initialize( Context* context, std::string app, int argc, char* 
 				cxxopts::value<std::string>())
 			("outputCsv", "filename of the file where per frame statistics will append.",
 				cxxopts::value<std::string>()->default_value(""))
-			("mode", "the comparison mode in [equ,pcc,pcqm,topo,ibsm]",
+			("mode", "the comparison mode in [equ,eqTFAN,pcc,pcqm,topo,ibsm]",
 				cxxopts::value<std::string>()->default_value("equ"))
 			("h,help", "Print usage")
 			;
@@ -92,6 +92,14 @@ bool CmdCompare::initialize( Context* context, std::string app, int argc, char* 
 			("unoriented", "If set, comparison will not consider faces orientation for comparisons.",
 				cxxopts::value<bool>()->default_value("false"))
 			;
+        options.add_options("eqTFAN mode")
+            ("eqTFAN_epsilon", "Used for point cloud comparison only. Distance threshold in world units for \"equality\" comparison. If 0.0 use strict equality (no distace computation).",
+                cxxopts::value<float>()->default_value("0.0"))
+            ("eqTFAN_earlyReturn", "Return as soon as a difference is found (faster). Otherwise provide more complete report (slower).",
+                cxxopts::value<bool>()->default_value("true"))
+            ("eqTFAN_unoriented", "If set, comparison will not consider faces orientation for comparisons.",
+                cxxopts::value<bool>()->default_value("false"))
+            ;
 		options.add_options("topo mode")
 			("faceMapFile", "path to the topology text file matching modelB topology (face) to modelA topology (face).",
 				cxxopts::value<std::string>())
@@ -169,7 +177,7 @@ bool CmdCompare::initialize( Context* context, std::string app, int argc, char* 
     // mode in equ,pcc,pcqm,topo. defaults to equ
     if ( result.count( "mode" ) ) {
       _mode = result["mode"].as<std::string>();
-      if ( _mode != "equ" && _mode != "pcc" && _mode != "pcqm" && _mode != "topo" && _mode != "ibsm" ) {
+      if ( _mode != "equ" && _mode != "pcc" && _mode != "pcqm" && _mode != "topo" && _mode != "ibsm" && _mode != "eqTFAN") {
         std::cerr << "Error: invalid --mode \"" << _mode << "\"" << std::endl;
         return false;
       }
@@ -185,6 +193,10 @@ bool CmdCompare::initialize( Context* context, std::string app, int argc, char* 
     if ( result.count( "epsilon" ) ) _equEpsilon = result["epsilon"].as<float>();
     if ( result.count( "earlyReturn" ) ) _equEarlyReturn = result["earlyReturn"].as<bool>();
     if ( result.count( "unoriented" ) ) _equUnoriented = result["unoriented"].as<bool>();
+    // eqTFAN
+    if (result.count("eqTFAN_epsilon")) _eqTFANEpsilon = result["eqTFAN_epsilon"].as<float>();
+    if (result.count("eqTFAN_earlyReturn")) _eqTFANEarlyReturn = result["eqTFAN_earlyReturn"].as<bool>();
+    if (result.count("eqTFAN_unoriented")) _eqTFANUnoriented = result["eqTFAN_unoriented"].as<bool>();
     // PCC
     if ( result.count( "singlePass" ) ) _pccParams.singlePass = result["singlePass"].as<bool>();
     if ( result.count( "hausdorff" ) ) _pccParams.hausdorff = result["hausdorff"].as<bool>();
@@ -308,35 +320,65 @@ bool CmdCompare::process( uint32_t frame ) {
 
   // Perform the processings
   clock_t t1 = clock();
-  if ( _mode == "equ" ) {
-    std::cout << "Compare models for equality" << std::endl;
-    std::cout << "  Epsilon = " << _equEpsilon << std::endl;
-    res = _compare.equ( *inputModelA,
-                        *inputModelB,
-                        *textureMapA,
-                        *textureMapB,
-                        _equEpsilon,
-                        _equEarlyReturn,
-                        _equUnoriented,
-                        *outputModelA,
-                        *outputModelB );
+  if (_mode == "equ") {
+      std::cout << "Compare models for equality" << std::endl;
+      std::cout << "  Epsilon = " << _equEpsilon << std::endl;
+      res = _compare.equ(*inputModelA,
+          *inputModelB,
+          *textureMapA,
+          *textureMapB,
+          _equEpsilon,
+          _equEarlyReturn,
+          _equUnoriented,
+          *outputModelA,
+          *outputModelB);
 
-    // print the stats
-    if ( csvFileOut ) {
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) {
-        csvFileOut << "modelA;textureA;modelB;textureB;frame;epsilon;earlyReturn;unoriented;meshEquality;textureDiffs"
-                   << std::endl;
+      // print the stats
+      if (csvFileOut) {
+          // print the header if file is empty
+          if (csvFileLength == 0) {
+              csvFileOut << "modelA;textureA;modelB;textureB;frame;epsilon;earlyReturn;unoriented;meshEquality;textureDiffs"
+                  << std::endl;
+          }
+          // print stats
+          csvFileOut << _inputModelAFilename << ";" << _inputTextureAFilename << ";" << _inputModelBFilename << ";"
+              << _inputTextureBFilename << ";" << frame << ";" << _equEpsilon << ";" << _equEarlyReturn << ";"
+              << _equUnoriented << ";"
+              << "TODO"
+              << "TODO" << std::endl;
+          // done
+          csvFileOut.close();
       }
-      // print stats
-      csvFileOut << _inputModelAFilename << ";" << _inputTextureAFilename << ";" << _inputModelBFilename << ";"
-                 << _inputTextureBFilename << ";" << frame << ";" << _equEpsilon << ";" << _equEarlyReturn << ";"
-                 << _equUnoriented << ";"
-                 << "TODO"
-                 << "TODO" << std::endl;
-      // done
-      csvFileOut.close();
-    }
+  }
+  else if (_mode == "eqTFAN") {
+        std::cout << "Compare models for equality by using TFAN" << std::endl;
+        std::cout << "  eqTFAN_Epsilon = " << _eqTFANEpsilon << std::endl;
+        res = _compare.eqTFAN(*inputModelA,
+            *inputModelB,
+            *textureMapA,
+            *textureMapB,
+            _eqTFANEpsilon,
+            _eqTFANEarlyReturn,
+            _eqTFANUnoriented,
+            *outputModelA,
+            *outputModelB);
+
+        // print the stats
+        if (csvFileOut) {
+            // print the header if file is empty
+            if (csvFileLength == 0) {
+                csvFileOut << "modelA;textureA;modelB;textureB;frame;epsilon;earlyReturn;unoriented;meshEquality;textureDiffs"
+                    << std::endl;
+            }
+            // print stats
+            csvFileOut << _inputModelAFilename << ";" << _inputTextureAFilename << ";" << _inputModelBFilename << ";"
+                << _inputTextureBFilename << ";" << frame << ";" << _eqTFANEpsilon << ";" << _eqTFANEarlyReturn << ";"
+                << _eqTFANUnoriented << ";"
+                << "TODO"
+                << "TODO" << std::endl;
+            // done
+            csvFileOut.close();
+        }
   } else if ( _mode == "topo" ) {
     std::cout << "Compare models topology for equivalence" << std::endl;
     std::cout << "  faceMapFile = " << _topoFaceMapFilename << std::endl;

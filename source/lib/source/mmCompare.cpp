@@ -46,6 +46,7 @@
 #include "mmRendererHw.h"
 #include "mmStatistics.h"
 #include "mmCompare.h"
+#include "mmCompareTFAN.h"
 
 // "implementation" done in mmRendererHW
 #include <stb_image_write.h>
@@ -74,8 +75,7 @@ inline bool areTrianglesEqual( bool              unoriented,
                                const mm::Vertex& vB3 ) {
   return ( vA1 == vB1 && vA2 == vB2 && vA3 == vB3 ) || ( vA1 == vB2 && vA2 == vB3 && vA3 == vB1 )
          || ( vA1 == vB3 && vA2 == vB1 && vA3 == vB2 )
-         || ( unoriented
-              && ( ( vA1 == vB1 && vA2 == vB3 && vA3 == vB2 ) || ( vA1 == vB3 && vA2 == vB2 && vA3 == vB1 )
+         || ( unoriented && ( ( vA1 == vB1 && vA2 == vB3 && vA3 == vB2 ) || ( vA1 == vB3 && vA2 == vB2 && vA3 == vB1 )
                    || ( vA1 == vB2 && vA2 == vB1 && vA3 == vB3 ) ) );
 }
 
@@ -267,6 +267,193 @@ int Compare::equ( const mm::Model& inputA,
   }
 }
 
+int Compare::eqTFAN(mm::Model& inputA,
+    mm::Model& inputB,
+    const mm::Image& mapA,
+    const mm::Image& mapB,
+    float            epsilon,
+    bool             earlyReturn,
+    bool             unoriented,
+    mm::Model& outputA,
+    mm::Model& outputB) {
+    // we test the maps
+    if (mapA.data != NULL || mapB.data != NULL) {
+        if (mapA.data == NULL) {
+            std::cout << "texture maps are not equal: mapA is null" << std::endl;
+        }
+        else if (mapB.data == NULL) {
+            std::cout << "texture maps are not equal: mapB is null" << std::endl;
+        }
+        else {
+            if (mapA.width != mapB.width || mapA.height != mapB.height) {
+                std::cout << "texture maps are not equal: dimensions are not equal" << std::endl;
+            }
+            else {
+                size_t diffs = 0;
+                for (size_t row = 0; row < mapA.height; ++row) {
+                    for (size_t col = 0; col < mapA.width; ++col) {
+                        glm::vec3 colA, colB;
+                        mapA.fetchRGB(col, row, colA);
+                        mapB.fetchRGB(col, row, colB);
+                        if (colA != colB) ++diffs;
+                    }
+                }
+                if (diffs != 0) {
+                    std::cout << "texture maps are not equal: " << diffs << "pixel differences" << std::endl;
+                }
+                else {
+                    std::cout << "texture maps are equal" << std::endl;
+                }
+            }
+        }
+    }
+    else {
+        std::cout << "skipping texture maps comparison" << std::endl;
+    }
+
+    if (inputA.triangles.size() != inputB.triangles.size()) {
+        std::cout << "meshes are not equal, number of triangles are different " << inputA.triangles.size() / 3 << " vs "
+            << inputB.triangles.size() / 3 << std::endl;
+        return true;
+    }
+
+    // mesh mode
+    if (inputA.triangles.size() != 0) {
+        if (inputA.vertices.size() != inputB.vertices.size()) {
+            std::cout << "meshes are not equal, number of positions are different " <<
+                inputA.getPositionCount() << " vs " << inputB.getPositionCount() << std::endl;
+            return true;
+        }
+        if (inputA.uvcoords.size() != inputB.uvcoords.size()) {
+            std::cout << "meshes are not equal, number of uv coordinates are different " <<
+                inputA.getUvCount() << " vs " << inputB.getUvCount() << std::endl;
+            return true;
+        }
+        // prepare a store for face status
+        // doundInB[true] if the nth face of B matches one face of A
+        std::vector<bool> foundInB(inputB.getTriangleCount(), false);
+
+        const bool hasColors = inputA.hasColors() && inputB.hasColors();
+        const bool hasUvCoords = inputA.hasUvCoords() && inputB.hasUvCoords();
+        const bool hasNormals = inputA.hasNormals() && inputB.hasNormals();
+
+        size_t diffs = 0;  // count the differences if no earlyReturn option
+        size_t diffsGeo = 0;
+        size_t diffsUV = 0;
+        CompareTFAN CompareTFAN;
+        int  compNum;  //the differences between geometry and texture
+        compNum = 3;
+        //handle geometric connectivity
+        CompareTFAN.compareConnectivity(inputA, inputB, unoriented, inputA.triangles, inputA.vertices, inputB.triangles, inputB.vertices, earlyReturn, compNum, diffsGeo);
+
+        compNum = 2;
+        //handle texture connectivity
+        CompareTFAN.compareConnectivity(inputA, inputB, unoriented, inputA.trianglesuv, inputA.uvcoords, inputB.trianglesuv, inputB.uvcoords, earlyReturn, compNum, diffsUV);
+
+        if (!diffsGeo && !diffsUV) {
+            std::cout << " meshes are equal" << std::endl;
+            return true;
+        }
+        else {
+            std::cout << "meshes are not equal, " << diffsGeo << " different triangles" << std::endl;
+            // provide more details on what is different at additional computation cost (request from Sony team)
+            size_t vertDiffs = std::abs((long long)(inputA.getPositionCount() - inputB.getPositionCount()));
+            for (size_t index = 0; index < std::min(inputA.getPositionCount(), inputB.getPositionCount()); ++index) {
+                if (inputA.fetchPosition(index) != inputB.fetchPosition(index))
+                    ++vertDiffs;
+            }
+            std::cout << "Position differences: " << vertDiffs << std::endl;
+            //
+            size_t uvDiffs = std::abs((long long)(inputA.getUvCount() - inputB.getUvCount()));
+            for (size_t index = 0; index < std::min(inputA.getUvCount(), inputB.getUvCount()); ++index) {
+                if (inputA.fetchUv(index) != inputB.fetchUv(index))
+                    ++uvDiffs;
+            }
+            std::cout << "UV coords differences: " << uvDiffs << std::endl;
+            //
+            size_t colorDiffs = std::abs((long long)(inputA.getColorCount() - inputB.getColorCount()));
+            for (size_t index = 0; index < std::min(inputA.getColorCount(), inputB.getColorCount()); ++index) {
+                if (inputA.fetchColor(index) != inputB.fetchColor(index))
+                    ++colorDiffs;
+            }
+            std::cout << "Colors differences: " << colorDiffs << std::endl;
+            //
+            size_t normalDiffs = std::abs((long long)(inputA.getNormalCount() - inputB.getNormalCount()));
+            for (size_t index = 0; index < std::min(inputA.getNormalCount(), inputB.getNormalCount()); ++index) {
+                if (inputA.fetchNormal(index) != inputB.fetchNormal(index))
+                    ++normalDiffs;
+            }
+            std::cout << "Normals differences: " << normalDiffs << std::endl;
+        }
+        return true;
+    }
+    // Point cloud mode, sort vertices then compare
+    else {
+        // allocate room for the results
+        outputA.vertices.resize(inputA.vertices.size());
+        outputB.vertices.resize(inputB.vertices.size());
+
+        // prepare outputA
+        std::vector<mm::Vertex> positions;
+        mm::Vertex              vertex;
+        for (int i = 0; i < inputA.vertices.size() / 3; i++) {
+            vertex.pos = glm::vec3(inputA.vertices[i * 3 + 0], inputA.vertices[i * 3 + 1], inputA.vertices[i * 3 + 2]);
+            positions.push_back(vertex);
+        }
+        std::sort(positions.begin(), positions.end(), mm::CompareVertex<true, false, false, false>());
+
+        for (int i = 0; i < positions.size(); i++) {
+            outputA.vertices[i * 3 + 0] = positions[i].pos.x;
+            outputA.vertices[i * 3 + 1] = positions[i].pos.y;
+            outputA.vertices[i * 3 + 2] = positions[i].pos.z;
+        }
+
+        // prepare outputB
+        positions.clear();
+        for (int i = 0; i < inputB.vertices.size() / 3; i++) {
+            vertex.pos = glm::vec3(inputB.vertices[i * 3 + 0], inputB.vertices[i * 3 + 1], inputB.vertices[i * 3 + 2]);
+            positions.push_back(vertex);
+        }
+        std::sort(positions.begin(), positions.end(), mm::CompareVertex<true, false, false, false>());
+
+        for (int i = 0; i < positions.size(); i++) {
+            outputB.vertices[i * 3 + 0] = positions[i].pos.x;
+            outputB.vertices[i * 3 + 1] = positions[i].pos.y;
+            outputB.vertices[i * 3 + 2] = positions[i].pos.z;
+        }
+
+        // now compare the results
+        if (epsilon == 0) {
+            if (outputB.vertices == outputA.vertices) {
+                std::cout << "model vertices are equals" << std::endl;
+                return true;
+            }
+            else {
+                std::cout << "model vertices are not equals" << std::endl;
+                return true;
+            }
+        }
+        else {
+            if (outputA.vertices.size() != outputB.vertices.size()) {
+                std::cout << "model vertices are not equals" << std::endl;
+                return true;
+            }
+            size_t count = 0;
+            for (size_t i = 0; i < outputA.vertices.size() / 3; i++) {
+                glm::vec3 A = glm::make_vec3(&outputA.vertices[i * 3]);
+                glm::vec3 B = glm::make_vec3(&outputB.vertices[i * 3]);
+                if (glm::length(A - B) >= epsilon) { ++count; }
+            }
+            if (count == 0) {
+                std::cout << "model vertices are equals" << std::endl;
+            }
+            else {
+                std::cout << "model vertices are not equals, found " << count << " differences" << std::endl;
+            }
+            return true;
+        }
+    }
+}
 int Compare::topo( const mm::Model&   modelA,
                    const mm::Model&   modelB,
                    const std::string& faceMapFilename,
