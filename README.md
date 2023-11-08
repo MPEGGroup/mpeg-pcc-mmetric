@@ -238,12 +238,12 @@ mm.exe \
 # Command references 
 ```
 
-3D model processing commands v1.1.3
+3D model processing commands v1.1.4
 Usage:
-  mm command [OPTION...]
+  mm.exe command [OPTION...]
 
 Command help:
-  mm command --help
+  mm.exe command --help
 
 Command:
   analyse	Analyse model and/or texture map
@@ -265,7 +265,7 @@ Command:
 
 Analyse model and/or texture map
 Usage:
-  mm analyse [OPTION...]
+  mm.exe analyse [OPTION...]
 
       --inputModel arg  path to input model (obj or ply file)
       --inputMap arg    path to input texture map (png, jpeg)
@@ -281,7 +281,7 @@ Usage:
 
 Compare model A vs model B
 Usage:
-  mm compare [OPTION...]
+  mm.exe compare [OPTION...]
 
       --inputModelA arg   path to reference input model (obj or ply file)
       --inputModelB arg   path to distorted input model (obj or ply file)
@@ -293,9 +293,20 @@ Usage:
       --outputModelB arg  path to output model B (obj or ply file)
       --outputCsv arg     filename of the file where per frame statistics
                           will append. (default: )
-      --mode arg          the comparison mode in [equ,pcc,pcqm,topo,ibsm]
-                          (default: equ)
+      --mode arg          the comparison mode in
+                          [equ,eqTFAN,pcc,pcqm,topo,ibsm] (default: equ)
   -h, --help              Print usage
+
+ eqTFAN mode options:
+      --eqTFAN_epsilon arg  Used for point cloud comparison only. Distance
+                            threshold in world units for "equality" comparison.
+                            If 0.0 use strict equality (no distace
+                            computation). (default: 0.0)
+      --eqTFAN_earlyReturn  Return as soon as a difference is found (faster).
+                            Otherwise provide more complete report (slower).
+                            (default: true)
+      --eqTFAN_unoriented   If set, comparison will not consider faces
+                            orientation for comparisons.
 
  equ mode options:
       --epsilon arg  Used for point cloud comparison only. Distance threshold
@@ -375,7 +386,7 @@ Usage:
 
 Degrade a mesh (todo points)
 Usage:
-  mm degrade [OPTION...]
+  mm.exe degrade [OPTION...]
 
   -i, --inputModel arg   path to input model (obj or ply file)
   -o, --outputModel arg  path to output model (obj or ply file)
@@ -394,7 +405,7 @@ Usage:
 
 Dequantize model (mesh or point cloud) 
 Usage:
-  mm dequantize [OPTION...]
+  mm.exe dequantize [OPTION...]
 
   -i, --inputModel arg        path to input model (obj or ply file)
   -o, --outputModel arg       path to output model (obj or ply file)
@@ -437,7 +448,7 @@ Usage:
 
 Computes the mesh normals.
 Usage:
-  mm normals [OPTION...]
+  mm.exe normals [OPTION...]
 
   -i, --inputModel arg   path to input model (obj or ply file)
   -o, --outputModel arg  path to output model (obj or ply file)
@@ -455,7 +466,7 @@ Usage:
 
 Quantize model (mesh or point cloud)
 Usage:
-  mm quantize [OPTION...]
+  mm.exe quantize [OPTION...]
 
   -i, --inputModel arg        path to input model (obj or ply file)
   -o, --outputModel arg       path to output model (obj or ply file)
@@ -498,7 +509,7 @@ Usage:
 
 Reindex mesh and optionaly sort vertices and face indices
 Usage:
-  mm reindex [OPTION...]
+  mm.exe reindex [OPTION...]
 
   -i, --inputModel arg   path to input model (obj or ply file)
   -o, --outputModel arg  path to output model (obj or ply file)
@@ -514,7 +525,7 @@ Usage:
 
 Render a mesh (todo points)
 Usage:
-  mm render [OPTION...]
+  mm.exe render [OPTION...]
 
   -i, --inputModel arg     path to input model (obj or ply file)
   -m, --inputMap arg       path to input texture map (png, jpeg)
@@ -563,7 +574,7 @@ Usage:
 
 Convert mesh to point cloud
 Usage:
-  mm sample [OPTION...]
+  mm.exe sample [OPTION...]
 
   -i, --inputModel arg   path to input model (obj or ply file)
   -m, --inputMap arg     path to input texture map (png, jpg, rgb, yuv)
@@ -633,7 +644,7 @@ Usage:
 
 Sequence global parameters
 Usage:
-  mm sequence [OPTION...]
+  mm.exe sequence [OPTION...]
 
       --firstFrame arg  Sets the first frame of the sequence, included.
                         (default: 0)

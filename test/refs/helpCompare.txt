@@ -1,6 +1,6 @@
 Compare model A vs model B
 Usage:
-  mm compare [OPTION...]
+  mm.exe compare [OPTION...]
 
       --inputModelA arg   path to reference input model (obj or ply file)
       --inputModelB arg   path to distorted input model (obj or ply file)
@@ -12,9 +12,20 @@ Usage:
       --outputModelB arg  path to output model B (obj or ply file)
       --outputCsv arg     filename of the file where per frame statistics
                           will append. (default: )
-      --mode arg          the comparison mode in [equ,pcc,pcqm,topo,ibsm]
-                          (default: equ)
+      --mode arg          the comparison mode in
+                          [equ,eqTFAN,pcc,pcqm,topo,ibsm] (default: equ)
   -h, --help              Print usage
+
+ eqTFAN mode options:
+      --eqTFAN_epsilon arg  Used for point cloud comparison only. Distance
+                            threshold in world units for "equality" comparison.
+                            If 0.0 use strict equality (no distace
+                            computation). (default: 0.0)
+      --eqTFAN_earlyReturn  Return as soon as a difference is found (faster).
+                            Otherwise provide more complete report (slower).
+                            (default: true)
+      --eqTFAN_unoriented   If set, comparison will not consider faces
+                            orientation for comparisons.
 
  equ mode options:
       --epsilon arg  Used for point cloud comparison only. Distance threshold

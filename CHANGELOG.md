@@ -5,6 +5,12 @@ Primary author Jean-Eudes Marvie (InterDigital).
 
 Additional contributors mentioned per version or item hereafter.
 
+## Version 1_1_4
+
+- Add: eqTFAN lossless metric 
+  - Contributor: Wenjie Zou (Xidian University)
+- Fix: step size processing in meshToPcGrid (m65548)
+- Fix: update mpeg dmetric path to new location in cmake file
 
 ## Version 1_1_3
 
