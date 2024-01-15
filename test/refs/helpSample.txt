@@ -58,6 +58,8 @@ Usage:
                        in the output point cloud (default: 2000000)
 
  sdiv mode options:
+      --maxDepth arg       maximum recursion depth, maxDepth=1 means keep
+                           only original vertices (default: 100)
       --areaThreshold arg  face area limit to stop subdivision (default: 1.0)
       --mapThreshold       if set will refine until face vertices texels are
                            distanced of 1 and areaThreshold reached

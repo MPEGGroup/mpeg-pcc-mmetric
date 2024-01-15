@@ -266,132 +266,656 @@ bool IO::_saveModel( std::string filename, const Model& input ) {
   return true;
 }
 
-bool IO::_loadObj( std::string filename, Model& output ) {
-  std::ifstream fin;
-  // use a big 4MB buffer to accelerate reads
-  char* buf = new char[4 * 1024 * 1024 + 1];
-  fin.rdbuf()->pubsetbuf( buf, 4 * 1024 * 1024 + 1 );
-  fin.open( filename.c_str(), std::ios::in );
-  if ( !fin ) {
-    std::cerr << "Error: can't open file " << filename << std::endl;
-    delete[] buf;
-    return false;
-  }
-  int         temp_index;
-  float       temp_pos, temp_uv, temp_normal, temp_col;
-  std::string temp_flag, temp_str;
-  std::string line;
-  std::getline( fin, line );
-  while ( fin ) {
-    std::istringstream in( line );
-    temp_flag = "";
-    in >> temp_flag;  // temp_flag: the first word in the line
-    if ( temp_flag.compare( std::string( "mtllib" ) ) == 0 ) {
-      output.header = std::string( line.c_str() );
-    } else if ( temp_flag.compare( std::string( "v" ) ) == 0 ) {
-      // parse the position
-      for ( int i = 0; i < 3; i++ ) {
-        in >> temp_pos;
-        output.vertices.push_back( temp_pos );
-      }
-      // parse the color if any (re map 0.0-1.0 to 0-255 internal color format)
-      while ( in >> temp_col ) { output.colors.push_back( std::roundf( temp_col * 255 ) ); }
-    } else if ( temp_flag.compare( std::string( "vn" ) ) == 0 ) {
-      for ( int i = 0; i < 3; i++ ) {
-        in >> temp_normal;
-        output.normals.push_back( temp_normal );
-      }
-    } else if ( temp_flag.compare( std::string( "vt" ) ) == 0 ) {
-      for ( int i = 0; i < 2; i++ ) {
-        in >> temp_uv;
-        output.uvcoords.push_back( temp_uv );
-      }
-    } else if ( temp_flag.compare( std::string( "f" ) ) == 0 ) {
-      for ( int i = 0; i < 3; i++ ) {
-        in >> temp_str;
-        size_t found;
+#define FAST_OBJ_READ
+#ifdef FAST_OBJ_READ
+class iBuffer {
 
-        // parsing of texture coord indexes
-        // TODO parsing of normals indexes and reindex
-        found = temp_str.find_first_of( "/" );
-        if ( found != std::string::npos ) {
-          temp_index   = atoi( temp_str.substr( 0, found ).c_str() ) - 1;
-          int uv_index = atoi( temp_str.substr( found + 1, temp_str.size() - found ).c_str() ) - 1;
-          output.trianglesuv.push_back( uv_index );
-        } else temp_index = atoi( temp_str.c_str() ) - 1;
-        output.triangles.push_back( temp_index );
-      }
+public:
+    std::vector<char> buffer; // the bitstream
+    char* head = 0;           // current read position
+    char* end = 0;            // end of buffer
+    char* ls = 0;             // start of current line
+    int lc = 1;               // linecount
+
+    inline bool load(std::string filename) {
+        // if loader is reused need to reset
+        buffer.clear();
+        lc=1; 
+
+        FILE* fp = fopen(filename.c_str(), "rb"); // open input file in binary mode
+        if (!fp) {
+            std::cerr << "Error: can't open file " << filename << std::endl;
+            return false;
+        }
+
+        if (fseek(fp, SEEK_SET, SEEK_END) != 0) {
+            std::cerr << "Error: can't seek to end of file to get size " << filename << std::endl;
+            fclose(fp);
+            return false;
+        }
+        const size_t fileSize = static_cast<size_t>(ftell(fp));
+        if (fileSize == 0) {
+            std::cerr << "Error: empty file " << filename << std::endl;
+            fclose(fp);
+            return false;
+        }
+        // load the data into memory
+        buffer.resize(fileSize + 1); // forcing buffer ending with 0x00 to fix calls to int/float parsing (strtol ..)
+        rewind(fp);
+        auto size = 0;
+        if ((size = fread(buffer.data(), 1, fileSize, fp)) != fileSize) {
+            if (feof(fp)) {
+                std::cerr << "Error: can't load file into memory for parsing, unexpected end of file " << filename << std::endl;
+            }
+            else if (ferror(fp)) {
+                std::cerr << "Error: can't load file into memory for parsing, error while reading " << filename << std::endl;
+            } // else shall never occur ?
+            fclose(fp);
+            return false;
+        }
+        fclose(fp);
+
+        ls = head = &buffer[0];
+        end = buffer.data() + buffer.size();
+
+        return true;
     }
-    std::getline( fin, line );
-  }
-  fin.close();
-  delete[] buf;
 
-  if ( output.normals.size() != 0 && output.normals.size() != output.vertices.size() ) {
-    std::cout << "Warning: obj read, normals with separate index table are not yet supported. Skipping normals."
-              << std::endl;
-    output.normals.clear();
-  }
+    // reads a char, current head must be valid
+    // returns new head, 
+    inline char* getChar(char& c) {
+        c = *head;
+        return ++head;
+    }
+    // moves read head nb char back, current head can be = end
+    // no sanity check, head-n shall not be less than buffer start.
+    // returns new head, 
+    inline char* readBack(int n) {
+        return (head = head - n);
+    }
+    // reads a line and append to s, current head must be valid
+    // returns new head, 
+    // not efficient
+    inline char* getLine(std::string& s) {
+        char c;
+        while (getChar(c) < end && c != '\n' && c != '\r') {
+            s.push_back(c);
+        } 
+        // put back the last getChar, since it was a special char
+        readBack(1);
+        // eat eventual additional end of line special characters
+        if (head != end) {
+            while (getChar(c) < end && (c == '\n' || c == '\r')) { // we skip
+                if (c == '\n') {++lc; ls = head; }
+            }
+            // put back the last getChar, since it was not a special char
+            readBack(1);
+        }
+        return head;
+    }
+    // reads all successive spaces,\n and \r if any, current head must be valid
+    // this can skip several lines in one call
+    // returns new head, 
+    inline char* skipSpaces() {
+        char c;
+        while (getChar(c) < end && isspace(c)) {  // we skip
+            if (c == '\n') {++lc; ls = head; }
+        }
+        // last char is not a apsce or special, we readback
+        return readBack(1);
+    }
+    // skip line, eat chars until '\n' included or end of buffer is reached, current head must be valid
+    // returns new head, 
+    inline char* skipLine() {
+        char c;
+        while (head < end && getChar(c) < end && c != '\n' && c != '\r') {
+            // we skip
+        } // \n or \r was read but not pushed
+        // put back the last getChar, since it was not special char
+        readBack(1);
+        // eat eventual additional end of line special characters
+        while (head < end && getChar(c) < end && (c == '\n' || c == '\r')) {
+            // we skip
+            if (c == '\n') {++lc; ls = head; }// count a new line
+        }
+        // put back the last getChar, since it was not a special char
+        readBack(1);
+        return head;
+    }
 
-  return true;
+    // no error check
+    inline double getDouble(void) {
+        char* endptr = 0;
+        const double val = strtod(head, &endptr);
+        const auto success = (endptr != 0) && (endptr != head);
+        if (success)
+            head = endptr;
+        return val;
+    }
+
+    // with error check
+    inline bool getDouble(double& val) {
+        char* endptr = 0;
+        val = strtod(head, &endptr);
+        const auto success = (endptr != 0) && (endptr != head);
+        if (success)
+            head = endptr;
+        return success;
+    }
+
+    // no error check
+    inline long int getInteger(const int base = 10) {
+        char* endptr = 0;
+        auto val = strtol(head, &endptr, base);
+        const auto success = (endptr != 0) && (endptr != head);
+        if (success)
+            head = endptr;
+        return val;
+    }
+
+    // with error check
+    inline bool getInteger(long int& val, const int base = 10) {
+        char* endptr = 0;
+        val = strtol(head, &endptr, base);
+        const auto success = (endptr != 0) && (endptr != head);
+        if (success)
+            head = endptr;
+        return success;
+    }
+};
+
+bool IO::_loadObj(std::string filename, Model& output) {
+
+    // open file and load in memory
+    iBuffer bs; // the bitstream
+    if (!bs.load(filename))
+        return false;
+    //
+    char c = 0; // current character
+    int nIdxCount = 0;  // number of normal indices read
+    int uvIdxCount = 0; // number of uv indices read
+    int nbTessPol = 0;  // number of polygons/quads tesselated
+    int nbTessAdd = 0;  // number of triangles added by tesselation
+    // consume the first character
+    if ((bs.skipSpaces() == bs.end) || (bs.getChar(c) == bs.end))
+        return false;
+    // consume lines
+    while (bs.head < bs.end) {
+        // at this point either line necessarly have a first 
+        // character and it is not a space or special
+        if (c == 'v') {
+            char c2 = 0;
+            // consume the second character
+            if (bs.getChar(c2) == bs.end)
+                return false;
+
+            if (c2 == ' ') {
+                // parse the position
+                for (int i = 0; i < 3; i++) {
+                    double value = 0;
+                    if (!bs.getDouble(value)) {
+                        std::cerr << "Error: line " << bs.lc << " expected floating point value" << std::endl;
+                    }
+                    // may push zero to be "robust"
+                    output.vertices.push_back(value);
+                }
+                // parse the color if any (re map 0.0-1.0 to 0-255 internal color format)
+                double value = 0;
+                if (bs.getDouble(value)) {
+                    output.colors.push_back(std::roundf(value * 255));
+                    for (int i = 0; i < 2; i++) {
+                        value = 0;
+                        if (!bs.getDouble(value)) {
+                            std::cerr << "Error: line " << bs.lc << " expected floating point value" << std::endl;
+                        }
+                        // may push zero to be "robust"
+                        output.colors.push_back( std::roundf( value * 255 ) );
+                    }
+                }
+            }
+            else if (c2 == 'n') {
+                // parse the normal
+                for (int i = 0; i < 3; i++) {
+                    double value = 0;
+                    if (!bs.getDouble(value)) {
+                        std::cerr << "Error: line " << bs.lc << " expected floating point value" << std::endl;
+                    }
+                    // may push zero to be "robust"
+                    output.normals.push_back(value);
+                }
+            }
+            else if (c2 == 't') {
+                // parse the texture coordinate
+                for (int i = 0; i < 2; i++) {
+                    double value = 0;
+                    if (!bs.getDouble(value)) {
+                        std::cerr << "Error: line " << bs.lc << " expected floating point value" << std::endl;
+                    }
+                    // may push zero to be "robust"
+                    output.uvcoords.push_back(value);
+                }
+            }
+        }
+        else if (c == 'f') {
+            // max vertices for a polygon (the rest will be skiped)
+            const auto maxVertices = 8;
+            std::array<int32_t, 3> indices[maxVertices];
+            int numValidIndices = 0;
+            for (int i = 0; i < maxVertices; i++) { // up to 8 vertices
+                bool valid = true;
+                // parses one vertex pos/[tex][/norm]
+                // ugly if cascade sorry :-(
+                // coudl be moved in a separate func for better 
+                // legibility and les if/else (through early returns)
+                long int value = 0;
+                if (bs.getInteger(value)) {
+                    indices[i][0] = value; // pos index
+                    indices[i][1] = indices[i][2] = 1;
+                    // some more ?
+                    char f2;
+                    if (bs.head < bs.end) {
+                        bs.getChar(f2);
+                        if (f2 == '/') {
+                            if (bs.head < bs.end) {
+                                if (bs.getInteger(value)) {
+                                    ++uvIdxCount;
+                                    indices[i][1] = value; // UV index (optional)
+                                }
+                                if (bs.head < bs.end) {
+                                    char f3;
+                                    bs.getChar(f3);
+                                    if (f3 == '/') {
+                                        if (bs.head < bs.end) {
+                                            if (bs.getInteger(value)) {
+                                                ++nIdxCount;
+                                                indices[i][2] = value; // normal index (mandatory)
+                                            }
+                                            else {
+                                                valid = false;
+                                            }
+                                        }
+                                        else {
+                                            valid = false;
+                                        }
+                                    }
+                                    else {
+                                        bs.readBack(1);
+                                    }
+                                }
+                            }
+                            else {
+                                valid = false;
+                            }
+                        }
+                        else {
+                            bs.readBack(1);
+                        }
+                    } // else no more
+                }
+                else {
+                    valid = false;
+                }
+
+                //
+                if (valid) {
+                    ++numValidIndices;
+                }
+                else if (i < 3) {
+                    std::cerr << "Error: line " << bs.lc << " invalid vertex indices, skipping face" << std::endl;
+                    std::cerr << "Error: " << std::string( bs.ls, std::min(bs.head, bs.end) ) << std::endl;
+                }
+                else { // we stop it is not valid but this is allowed
+                    break;
+                }
+            }
+            if (numValidIndices >= 3) { // skip if error
+                // Process the first triangle.
+                for (int i = 0; i < 3; ++i) {
+                    output.triangles.push_back(indices[i][0] - 1);
+                    output.trianglesuv.push_back(indices[i][1] - 1);
+                    // no normal index table for the time being
+                }
+                // triangulate eventual quad or polygon from first vertex
+                // tri 0 -> 0 1 2 (the main one already done)
+                // tri 1 -> 0 2 3 si=2
+                // tri 2 -> 0 3 4 si=3 and so on
+                // Iterate over start index
+                for (int si = 2; si < numValidIndices - 1; si++) {
+                    output.triangles.push_back(indices[0][0] - 1);
+                    output.trianglesuv.push_back(indices[0][1] - 1);
+                    // push the two other indices
+                    for (int ci = 0; ci < 2; ci++) {
+                        output.triangles.push_back(indices[si + ci][0] - 1);
+                        output.trianglesuv.push_back(indices[si + ci][1] - 1);
+                    }
+                }
+                nbTessPol += (int)(numValidIndices > 3);
+                nbTessAdd += numValidIndices - 3;
+            }
+        }
+        else if (c == 'm') { // material lib (key is 'mtllib', but no other starts with 'm')
+            // TODO: off course it is not the proper way to handle materials.
+            output.header = "m";
+            bs.getLine(output.header); // push the rest of the line to the header
+            bs.readBack(1); // push back the end of line symbol so generic skipLine will work
+        }
+
+
+        // purge eventual end of line
+        // This silent skip unsupported tags or errors
+        if ( bs.skipLine() < bs.end ) {
+            // purge useless chars and then consume the first character of next non empty line
+            if ( bs.skipSpaces() < bs.end ) { 
+                bs.getChar( c ); 
+            }
+        }
+    }
+
+    if (uvIdxCount == 0) {
+        // did not find any uv indices in the file
+        // if partial indices we keep the table (set to 0 for faces with no idx in the file)
+        output.trianglesuv.clear();
+    }
+
+    if (nIdxCount == 0) {
+        //output.trianglesnrm.clear();
+    }
+    else {
+        std::cout << "Warning: obj read, normals with separate index table are not yet supported. Skipping normals." << std::endl;
+        output.normals.clear();
+    }
+    if (nbTessPol != 0) {
+        std::cout << "Tesselated " << nbTessPol << " polygons/quads introducing " << nbTessAdd << " triangles" << std::endl;
+    }
+
+    return true;
+}
+#else
+bool IO::_loadObj(std::string filename, Model& output) {
+
+    std::ifstream fin;
+    // use a big 4MB buffer to accelerate reads
+    char* buf = new char[4 * 1024 * 1024 + 1];
+    fin.rdbuf()->pubsetbuf(buf, 4 * 1024 * 1024 + 1);
+    fin.open(filename.c_str(), std::ios::in);
+    if (!fin) {
+        std::cerr << "Error: can't open file " << filename << std::endl;
+        delete[] buf;
+        return false;
+    }
+    int         temp_index;
+    float       temp_pos, temp_uv, temp_normal, temp_col;
+    std::string temp_flag, temp_str;
+    std::string line;
+    std::getline(fin, line);
+    bool hasNormalIndices = false; // if file contains a normal index table
+    while (fin) {
+        std::istringstream in(line);
+        temp_flag = "";
+        in >> temp_flag;  // temp_flag: the first word in the line
+        if (temp_flag.compare(std::string("mtllib")) == 0) {
+            output.header = std::string(line.c_str());
+        }
+        else if (temp_flag.compare(std::string("v")) == 0) {
+            // parse the position
+            for (int i = 0; i < 3; i++) {
+                in >> temp_pos;
+                output.vertices.push_back(temp_pos);
+            }
+            // parse the color if any (re map 0.0-1.0 to 0-255 internal color format)
+            while (in >> temp_col) { output.colors.push_back(std::roundf(temp_col * 255)); }
+        }
+        else if (temp_flag.compare(std::string("vn")) == 0) {
+            for (int i = 0; i < 3; i++) {
+                in >> temp_normal;
+                output.normals.push_back(temp_normal);
+            }
+        }
+        else if (temp_flag.compare(std::string("vt")) == 0) {
+            for (int i = 0; i < 2; i++) {
+                in >> temp_uv;
+                output.uvcoords.push_back(temp_uv);
+            }
+        }
+        else if (temp_flag.compare(std::string("f")) == 0) {
+            // TODO parsing of normals indexes and reindex
+            for (int i = 0; i < 3; i++) {
+                in >> temp_str;
+                const auto found = temp_str.find_first_of("/");
+                if (found != std::string::npos) {
+                    const auto foundLast = temp_str.find_last_of("/");
+                    temp_index = atoi(temp_str.substr(0, found).c_str()) - 1;
+                    // found exists so foundLast necessarly exists beeing at least equal to found
+                    if (foundLast != found) {
+                        hasNormalIndices = true;
+                        if (foundLast - found > 1) { // vidx/uvidx/nrmidx
+                            int uv_index = atoi(temp_str.substr(found + 1, foundLast - found).c_str()) - 1;
+                            output.trianglesuv.push_back(uv_index);
+                        }
+                        // else vidx//nrmidx or 
+                    }
+                    else { // "vidx/uvidx"
+                        int uv_index = atoi(temp_str.substr(found + 1, temp_str.size() - found).c_str()) - 1;
+                        output.trianglesuv.push_back(uv_index);
+                    }
+                }
+                else // vidx alone, no '/' sumbol
+                    temp_index = atoi(temp_str.c_str()) - 1;
+                output.triangles.push_back(temp_index);
+            }
+        }
+        std::getline(fin, line);
+    }
+    fin.close();
+    delete[] buf;
+
+    if (hasNormalIndices || (output.normals.size() != 0 && output.normals.size() != output.vertices.size())) {
+        std::cout << "Warning: obj read, normals with separate index table are not yet supported. Skipping normals."
+            << std::endl;
+        output.normals.clear();
+    }
+
+    return true;
+}
+#endif
+
+#define FAST_OBJ_WRITE
+#ifdef FAST_OBJ_WRITE
+
+// Buffer used for encoding float/int numbers.
+char num_buffer_[20];
+
+bool Encode(const void* data, size_t data_size, std::vector<char>& bitstream) {
+    const uint8_t* src_data = reinterpret_cast<const uint8_t*>(data);
+    bitstream.insert(bitstream.end(), src_data, src_data + data_size);
+    return true;
 }
 
-bool IO::_saveObj( std::string filename, const Model& input ) {
-  std::ofstream fout;
-  // use a big 4MB buffer to accelerate writes
-  char* buf = new char[4 * 1024 * 1024 + 1];
-  fout.rdbuf()->pubsetbuf( buf, 4 * 1024 * 1024 + 1 );
-  fout.open( filename.c_str(), std::ios::out );
-  if ( !fout ) {
-    std::cerr << "Error: can't open file " << filename << std::endl;
-    delete[] buf;
-    return false;
-  }
-  // this is mandatory to print floats with full precision
-  fout.precision( std::numeric_limits<float>::max_digits10 );
-
-  printf( "_saveObj %-40s: V = %zu Vc = %zu N = %zu UV = %zu F = %zu Fuv = %zu \n",
-          filename.c_str(),
-          input.vertices.size() / 3,
-          input.colors.size() / 3,
-          input.normals.size() / 3,
-          input.uvcoords.size() / 2,
-          input.triangles.size() / 3,
-          input.trianglesuv.size() / 3 );
-  fflush( stdout );
-
-  fout << input.header << std::endl;
-  for ( int i = 0; i < input.vertices.size() / 3; i++ ) {
-    fout << "v " << input.vertices[i * 3 + 0] << " " << input.vertices[i * 3 + 1] << " " << input.vertices[i * 3 + 2];
-    if ( input.colors.size() == input.vertices.size() ) {
-      fout << " " << input.colors[i * 3 + 0] / 255 << " " << input.colors[i * 3 + 1] / 255 << " "
-           << input.colors[i * 3 + 2] / 255 << std::endl;
-    } else {
-      fout << std::endl;
-    }
-  }
-  for ( int i = 0; i < input.normals.size() / 3; i++ ) {
-    fout << "vn " << input.normals[i * 3 + 0] << " " << input.normals[i * 3 + 1] << " " << input.normals[i * 3 + 2]
-         << std::endl;
-  }
-  for ( int i = 0; i < input.uvcoords.size() / 2; i++ ) {
-    fout << "vt " << input.uvcoords[i * 2 + 0] << " " << input.uvcoords[i * 2 + 1] << std::endl;
-  }
-  if ( input.hasUvCoords() ) { fout << "usemtl material0000" << std::endl; }
-  for ( int i = 0; i < input.triangles.size() / 3; i++ ) {
-    if ( input.trianglesuv.size() == input.triangles.size() ) {
-      fout << "f " << input.triangles[i * 3 + 0] + 1 << "/" << input.trianglesuv[i * 3 + 0] + 1 << " "
-           << input.triangles[i * 3 + 1] + 1 << "/" << input.trianglesuv[i * 3 + 1] + 1 << " "
-           << input.triangles[i * 3 + 2] + 1 << "/" << input.trianglesuv[i * 3 + 2] + 1 << std::endl;
-    } else {
-      fout << "f " << input.triangles[i * 3 + 0] + 1 << " " << input.triangles[i * 3 + 1] + 1 << " "
-           << input.triangles[i * 3 + 2] + 1 << std::endl;
-    }
-  }
-  fout.close();
-  delete[] buf;
-  return true;
+void EncodeFloat(float val, std::vector<char>& bitstream) {
+    snprintf(num_buffer_, sizeof(num_buffer_), "%.9g", val); //%.9g keeps backward compat with previous printer
+    Encode(num_buffer_, strlen(num_buffer_), bitstream);
 }
+
+void EncodeFloatList(float* vals, int num_vals, std::vector<char>& bitstream) {
+    for (int i = 0; i < num_vals; ++i) {
+        if (i > 0) {
+            Encode(" ", 1, bitstream);
+        }
+        EncodeFloat(vals[i], bitstream);
+    }
+}
+
+void EncodeInt(int32_t val, std::vector<char>& bitstream) {
+    snprintf(num_buffer_, sizeof(num_buffer_), "%d", val);
+    Encode(num_buffer_, strlen(num_buffer_), bitstream);
+}
+bool IO::_saveObj(std::string filename, const Model& input) {
+
+    FILE* fp = fopen(filename.c_str(), "w+");
+    if (!fp) {
+        std::cerr << "Error: can't open file " << filename << std::endl;
+        return false;
+    }
+
+    std::vector<char> bs; // the bitstream
+
+    printf("_saveObj %-40s: V = %zu Vc = %zu N = %zu UV = %zu F = %zu Fuv = %zu \n",
+        filename.c_str(),
+        input.vertices.size() / 3,
+        input.colors.size() / 3,
+        input.normals.size() / 3,
+        input.uvcoords.size() / 2,
+        input.triangles.size() / 3,
+        input.trianglesuv.size() / 3);
+    fflush(stdout);
+
+    Encode(input.header.data(), input.header.size(), bs);
+    Encode("\n", 1, bs);
+
+    for (int i = 0; i < input.vertices.size() / 3; i++) {
+        Encode("v", 1, bs);
+        for (auto c = 0; c < 3; ++c) {
+            Encode(" ", 1, bs);
+            EncodeFloat(input.vertices[i * 3 + c], bs);
+        }
+        if (input.colors.size() == input.vertices.size()) {
+            for (auto c = 0; c < 3; ++c) {
+                Encode(" ", 1, bs);
+                EncodeFloat(input.colors[i * 3 + c] / 255, bs);
+            }
+        }
+        Encode("\n", 1, bs);
+    }
+    for (int i = 0; i < input.normals.size() / 3; i++) {
+        Encode("vn", 2, bs);
+        for (auto c = 0; c < 3; ++c) {
+            Encode(" ", 1, bs);
+            EncodeFloat(input.normals[i * 3 + c], bs);
+        }
+        Encode("\n", 1, bs);
+    }
+    for (int i = 0; i < input.uvcoords.size() / 2; i++) {
+        Encode("vt", 2, bs);
+        for (auto c = 0; c < 2; ++c) {
+            Encode(" ", 1, bs);
+            EncodeFloat(input.uvcoords[i * 2 + c], bs);
+        }
+        Encode("\n", 1, bs);
+    }
+    if (input.hasUvCoords()) {
+        Encode("usemtl material0000\n", 20, bs);
+    }
+    for (int i = 0; i < input.triangles.size() / 3; i++) {
+        if (input.trianglesuv.size() == input.triangles.size()) {
+            Encode("f ", 2, bs);
+            for (auto c = 0; c < 3; ++c) {
+                if ( c > 0 ) Encode( " ", 1, bs );
+                EncodeInt(input.triangles[i * 3 + c] + 1, bs);
+                Encode("/", 1, bs);
+                EncodeInt(input.trianglesuv[i * 3 + c] + 1, bs);
+            }
+            Encode("\n", 1, bs);
+        }
+        else {
+            if (input.getUvCount() == input.getPositionCount()) {
+                Encode("f ", 2, bs);
+                for (auto c = 0; c < 3; ++c) {
+                    if ( c > 0 ) Encode( " ", 1, bs );
+                    EncodeInt(input.triangles[i * 3 + c] + 1, bs);
+                    Encode("/", 1, bs);
+                    EncodeInt(input.triangles[i * 3 + c] + 1, bs);
+                }
+                Encode("\n", 1, bs);
+            }
+            else {
+                Encode("f ", 2, bs);
+                for (auto c = 0; c < 3; ++c) {
+                    if ( c > 0 ) Encode( " ", 1, bs );
+                    EncodeInt(input.triangles[i * 3 + c] + 1, bs);
+                }
+                Encode("\n", 1, bs);
+            }
+        }
+    }
+
+    auto resSize = fwrite(bs.data(), sizeof(char), bs.size(), fp);
+    fclose(fp);
+
+    return resSize > 0;
+}
+
+#else
+bool IO::_saveObj(std::string filename, const Model& input) {
+
+    std::ofstream fout;
+    // use a big 4MB buffer to accelerate writes
+    char* buf = new char[4 * 1024 * 1024 + 1];
+    fout.rdbuf()->pubsetbuf(buf, 4 * 1024 * 1024 + 1);
+    fout.open(filename.c_str(), std::ios::out);
+    if (!fout) {
+        std::cerr << "Error: can't open file " << filename << std::endl;
+        delete[] buf;
+        return false;
+    }
+    // this is mandatory to print floats with full precision
+    fout.precision(std::numeric_limits<float>::max_digits10);
+
+    printf("_saveObj %-40s: V = %zu Vc = %zu N = %zu UV = %zu F = %zu Fuv = %zu \n",
+        filename.c_str(),
+        input.vertices.size() / 3,
+        input.colors.size() / 3,
+        input.normals.size() / 3,
+        input.uvcoords.size() / 2,
+        input.triangles.size() / 3,
+        input.trianglesuv.size() / 3);
+    fflush(stdout);
+
+    fout << input.header << std::endl;
+    for (int i = 0; i < input.vertices.size() / 3; i++) {
+        fout << "v " << input.vertices[i * 3 + 0] << " " << input.vertices[i * 3 + 1] << " " << input.vertices[i * 3 + 2];
+        if (input.colors.size() == input.vertices.size()) {
+            fout << " " << input.colors[i * 3 + 0] / 255 << " " << input.colors[i * 3 + 1] / 255 << " "
+                << input.colors[i * 3 + 2] / 255 << std::endl;
+        }
+        else {
+            fout << std::endl;
+        }
+    }
+    for (int i = 0; i < input.normals.size() / 3; i++) {
+        fout << "vn " << input.normals[i * 3 + 0] << " " << input.normals[i * 3 + 1] << " " << input.normals[i * 3 + 2]
+            << std::endl;
+    }
+    for (int i = 0; i < input.uvcoords.size() / 2; i++) {
+        fout << "vt " << input.uvcoords[i * 2 + 0] << " " << input.uvcoords[i * 2 + 1] << std::endl;
+    }
+    if (input.hasUvCoords()) {
+        fout << "usemtl material0000" << std::endl;
+    }
+    for (int i = 0; i < input.triangles.size() / 3; i++) {
+        if (input.trianglesuv.size() == input.triangles.size()) {
+            fout << "f " << input.triangles[i * 3 + 0] + 1 << "/" << input.trianglesuv[i * 3 + 0] + 1 << " "
+                << input.triangles[i * 3 + 1] + 1 << "/" << input.trianglesuv[i * 3 + 1] + 1 << " "
+                << input.triangles[i * 3 + 2] + 1 << "/" << input.trianglesuv[i * 3 + 2] + 1 << std::endl;
+        }
+        else {
+            if (input.getUvCount() == input.getPositionCount()) {
+                fout << "f " << input.triangles[i * 3 + 0] + 1 << "/" << input.triangles[i * 3 + 0] + 1 << " "
+                    << input.triangles[i * 3 + 1] + 1 << "/" << input.triangles[i * 3 + 1] + 1 << " "
+                    << input.triangles[i * 3 + 2] + 1 << "/" << input.triangles[i * 3 + 2] + 1 << std::endl;
+            }
+            else {
+                fout << "f " << input.triangles[i * 3 + 0] + 1 << " " << input.triangles[i * 3 + 1] + 1 << " "
+                    << input.triangles[i * 3 + 2] + 1 << std::endl;
+            }
+        }
+    }
+    fout.close();
+    delete[] buf;
+    return true;
+}
+#endif
+
+
 template<typename T, typename D>
 void templateConvert( std::shared_ptr<tinyply::PlyData> src,
                       const uint8_t                     numSrc,

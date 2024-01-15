@@ -614,8 +614,9 @@ void sampleIfNeeded( const mm::Model& input, const mm::Image& map, mm::Model& ou
     mm::Model reordered;
     reorder( input, std::string( "oriented" ), reordered );
 
-    // then use face subdivision without map citerion and area threshold of 2.0
-    mm::Sample::meshToPcDiv( reordered, output, map, 2.0, false, true, false );
+    // then use face subdivision without map citerion and area 
+    // threshold of 2.0, and maximum recursion depth of 3
+    mm::Sample::meshToPcDiv( reordered, output, map, 3, 2.0, false, true, false );
 
   } else {
     output = input;  //  pass through

@@ -74,6 +74,8 @@ bool CmdSample::initialize( Context* context, std::string app, int argc, char* a
 				cxxopts::value<float>()->default_value("0.0"))
 			;
 		options.add_options("sdiv mode")
+      ("maxDepth", "maximum recursion depth, maxDepth=1 means keep only original vertices",
+        cxxopts::value<int>()->default_value("100"))
 			("areaThreshold", "face area limit to stop subdivision",
 				cxxopts::value<float>()->default_value("1.0"))
 			("mapThreshold", "if set will refine until face vertices texels are distanced of 1 and areaThreshold reached",
@@ -156,6 +158,7 @@ bool CmdSample::initialize( Context* context, std::string app, int argc, char* a
     //
     if ( result.count( "resolution" ) ) _resolution = result["resolution"].as<size_t>();
     if ( result.count( "thickness" ) ) thickness = result["thickness"].as<float>();
+    if ( result.count("maxDepth")) maxDepth = std::max(1, result["maxDepth"].as<int>());
     if ( result.count( "areaThreshold" ) ) areaThreshold = result["areaThreshold"].as<float>();
     if ( result.count( "lengthThreshold" ) ) lengthThreshold = result["lengthThreshold"].as<float>();
     if ( result.count( "mapThreshold" ) ) mapThreshold = result["mapThreshold"].as<bool>();
@@ -352,6 +355,7 @@ bool CmdSample::process( uint32_t frame ) {
     }
   } else if ( mode == "sdiv" ) {
     std::cout << "Sampling in SDIV mode" << std::endl;
+    std::cout << "  Maximum depth = " << maxDepth << std::endl;
     std::cout << "  Area threshold = " << areaThreshold << std::endl;
     std::cout << "  Map threshold = " << mapThreshold << std::endl;
     std::cout << "  Bilinear = " << bilinear << std::endl;
@@ -373,7 +377,7 @@ bool CmdSample::process( uint32_t frame ) {
                                computedThres );
     } else {
       mm::Sample::meshToPcDiv(
-        *inputModel, *outputModel, *textureMap, areaThreshold, mapThreshold, bilinear, !hideProgress );
+        *inputModel, *outputModel, *textureMap, maxDepth, areaThreshold, mapThreshold, bilinear, !hideProgress );
     }
     // print the stats
     if ( csvFileOut ) {

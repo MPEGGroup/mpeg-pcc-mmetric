@@ -529,7 +529,12 @@ void subdivideTriangle( const Vertex& v1,
                         const float   thres,
                         const bool    mapThreshold,
                         const bool    bilinear,
+                        const int    maxDepth,
                         ModelBuilder& output ) {
+
+    if (maxDepth == 0)
+        return;
+
   // recursion stop criterion on area
   bool areaReached = Geometry::triangleArea( v1.pos, v2.pos, v3.pos ) < thres;
 
@@ -584,10 +589,10 @@ void subdivideTriangle( const Vertex& v1,
   output.pushVertex( e3, tex_map, bilinear );
 
   // go deeper in the subdivision
-  subdivideTriangle( e1, e2, e3, tex_map, thres, mapThreshold, bilinear, output );
-  subdivideTriangle( v1, e1, e3, tex_map, thres, mapThreshold, bilinear, output );
-  subdivideTriangle( e1, v2, e2, tex_map, thres, mapThreshold, bilinear, output );
-  subdivideTriangle( e2, v3, e3, tex_map, thres, mapThreshold, bilinear, output );
+  subdivideTriangle( e1, e2, e3, tex_map, thres, mapThreshold, bilinear, maxDepth-1, output );
+  subdivideTriangle( v1, e1, e3, tex_map, thres, mapThreshold, bilinear, maxDepth - 1, output );
+  subdivideTriangle( e1, v2, e2, tex_map, thres, mapThreshold, bilinear, maxDepth - 1, output );
+  subdivideTriangle( e2, v3, e3, tex_map, thres, mapThreshold, bilinear, maxDepth - 1, output );
 }
 
 // Use triangle subdivision algorithm to perform the sampling
@@ -595,6 +600,7 @@ void subdivideTriangle( const Vertex& v1,
 void Sample::meshToPcDiv( const Model& input,
                           Model&       output,
                           const Image& tex_map,
+                          int          maxDepth,
                           float        areaThreshold,
                           bool         mapThreshold,
                           bool         bilinear,
@@ -632,7 +638,7 @@ void Sample::meshToPcDiv( const Model& input,
     builder.pushVertex( v3, tex_map, bilinear );
 
     // subdivide recursively
-    subdivideTriangle( v1, v2, v3, tex_map, areaThreshold, mapThreshold, bilinear, builder );
+    subdivideTriangle( v1, v2, v3, tex_map, areaThreshold, mapThreshold, bilinear, maxDepth-1, builder );
   }
   if ( logProgress ) std::cout << std::endl;
   if ( skipped != 0 ) std::cout << "Skipped " << skipped << " degenerate triangles" << std::endl;
@@ -650,7 +656,8 @@ void Sample::meshToPcDiv( const Model& input,
                           bool         logProgress,
                           float&       computedThres ) {
   float value = 1.0;
-  meshToPcDiv( input, output, tex_map, value, 0, bilinear, logProgress );
+  const auto maxDepth = 10000;
+  meshToPcDiv( input, output, tex_map, maxDepth, value, 0, bilinear, logProgress );
   // search to init the algo bounds
   float minBound = 0;
   float maxBound = 0;
@@ -678,7 +685,7 @@ void Sample::meshToPcDiv( const Model& input,
     std::cout << "  value=" << value << std::endl;
     //
     output.reset();
-    meshToPcDiv( input, output, tex_map, value, 0, bilinear, logProgress );
+    meshToPcDiv( input, output, tex_map, maxDepth, value, 0, bilinear, logProgress );
   }
 
   computedThres = value;

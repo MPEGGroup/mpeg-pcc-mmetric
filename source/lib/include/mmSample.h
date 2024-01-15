@@ -89,6 +89,7 @@ class Sample {
   static void meshToPcDiv( const Model& input,
                            Model&       output,
                            const Image& tex_map,
+                           int          maxDepth,
                            float        areaThreshold,
                            bool         mapThreshold,
                            bool         bilinear,

@@ -49,6 +49,7 @@ class CmdSample : Command {
   // Face, Grid and sdiv options
   bool bilinear = false;
   // Face subdiv options
+  int maxDepth = 100;
   float areaThreshold = 1.0F;
   bool  mapThreshold  = false;
   // Edge subdiv options (0.0 mean use resolution)
