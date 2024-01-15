@@ -23,6 +23,7 @@
 #include <map>
 #include <iostream>
 #include <sstream>
+#include <vector>
 
 // mathematics
 #include <glm/vec2.hpp>
@@ -99,6 +100,16 @@ inline bool parseVec4( const std::string& s, glm::vec4& res ) {
     res = tmp;
     return true;
   } catch ( std::istringstream::failure ) { return false; }
+}
+
+// split a string containing spaces into sub strings
+inline bool splitString( const std::string& str, std::vector<std::string>& urlsList ) {
+  std::istringstream       iss( str );
+  std::string              token;
+  while ( std::getline( iss, token, ' ' ) ) {
+    if ( !token.empty() ) { urlsList.push_back( token ); }
+  }
+  return true;
 }
 
 #endif

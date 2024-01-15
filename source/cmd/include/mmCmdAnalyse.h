@@ -31,11 +31,11 @@ class CmdAnalyse : Command {
   Context* _context;
   // the command options
   std::string _inputModelFilename;
-  std::string _inputTextureFilename;
+  std::vector<std::string> _inputTextureFilenames;
   std::string _outputCsvFilename;
   std::string _outputVarFilename;
-  // count statistics results array of <frame, nbface, nbvert, nbcol, nbnorm, nbuv>
-  std::vector<std::tuple<uint32_t, double, double, double, double, double> > _counts;
+  // count statistics results array of <frame, nbface, nbvert, nbcol, nbnorm, nbuv, nbtex>
+  std::vector<std::tuple<uint32_t, double, double, double, double, double, double> > _counts;
   // renge results
   glm::vec3 _minPos = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
                        std::numeric_limits<float>::max()};

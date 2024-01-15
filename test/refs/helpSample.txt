@@ -3,7 +3,9 @@ Usage:
   mm.exe sample [OPTION...]
 
   -i, --inputModel arg   path to input model (obj or ply file)
-  -m, --inputMap arg     path to input texture map (png, jpg, rgb, yuv)
+  -m, --inputMap arg     path to input texture map (png, jpg, rgb, yuv), can
+                         be multiple paths surrounded by double quotes and
+                         separated by spaces.
   -o, --outputModel arg  path to output model (obj or ply file)
       --mode arg         the sampling mode in [face,grid,map,sdiv,ediv,prnd]
       --hideProgress     hide progress display in console for use by robot

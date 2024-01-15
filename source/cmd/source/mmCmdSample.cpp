@@ -55,7 +55,7 @@ bool CmdSample::initialize( Context* context, std::string app, int argc, char* a
 		options.add_options()
 			("i,inputModel", "path to input model (obj or ply file)",
 				cxxopts::value<std::string>())
-			("m,inputMap", "path to input texture map (png, jpg, rgb, yuv)",
+			("m,inputMap", "path to input texture map (png, jpg, rgb, yuv), can be multiple paths surrounded by double quotes and separated by spaces.",
 				cxxopts::value<std::string>())
 			("o,outputModel", "path to output model (obj or ply file)",
 				cxxopts::value<std::string>())
@@ -133,7 +133,9 @@ bool CmdSample::initialize( Context* context, std::string app, int argc, char* a
       return false;
     }
     //
-    if ( result.count( "inputMap" ) ) inputTextureFilename = result["inputMap"].as<std::string>();
+    if (result.count("inputMap")) {
+        splitString(result["inputMap"].as<std::string>(), _inputTextureFilenames);
+    }
     //
     if ( result.count( "outputModel" ) ) outputModelFilename = result["outputModel"].as<std::string>();
     else {
@@ -206,25 +208,35 @@ bool CmdSample::initialize( Context* context, std::string app, int argc, char* a
 }
 
 bool CmdSample::process( uint32_t frame ) {
-  // Reading map if needed
-  mm::Image* textureMap;
-  if ( inputTextureFilename != "" ) {
-    textureMap = mm::IO::loadImage( inputTextureFilename );
-  } else {
-    std::cout << "Skipping map read, will parse use vertex color if any" << std::endl;
-    textureMap = new mm::Image();
-  }
-
   // the input
-  mm::Model* inputModel;
-  if ( ( inputModel = mm::IO::loadModel( inputModelFilename ) ) == NULL ) { return false; }
-  if ( inputModel->vertices.size() == 0 || inputModel->triangles.size() == 0 ) {
+  mm::Model* inputModelTotal;
+  if ( ( inputModelTotal = mm::IO::loadModel( inputModelFilename ) ) == NULL ) { return false; }
+  if ( inputModelTotal->vertices.size() == 0 || inputModelTotal->triangles.size() == 0 ) {
     std::cout << "Error: invalid input model from " << inputModelFilename << std::endl;
     return false;
   }
 
+  // now handle the textures
+  std::vector<std::string> textureMapUrls;
+  if (_inputTextureFilenames.size() != 0)
+  {
+      if (_inputTextureFilenames.size() == 1)
+      {
+          // check if the filename existis, otherwise try the URLs from the OBJ
+          if (_inputTextureFilenames[0].substr(_inputTextureFilenames[0].size() - 4, 1) == ".") {
+              textureMapUrls = _inputTextureFilenames;
+          }
+          else textureMapUrls = inputModelTotal->textureMapUrls;
+      }
+      else textureMapUrls = _inputTextureFilenames;
+  }
+  else textureMapUrls = inputModelTotal->textureMapUrls;
+  std::vector<mm::Image*> textureMapList;
+  // does nothing if lists are empty
+  mm::IO::loadImages(textureMapUrls, textureMapList);
+
   // the output
-  mm::Model* outputModel = new mm::Model();
+  mm::Model* outputModelTotal = new mm::Model();
 
   // create or open in append mode output csv if needed
   std::streamoff csvFileLength = 0;
@@ -246,216 +258,299 @@ bool CmdSample::process( uint32_t frame ) {
 
   // Perform the processings
   clock_t t1 = clock();
-  if ( mode == "face" ) {
-    std::cout << "Sampling in FACE mode" << std::endl;
-    std::cout << "  Resolution = " << _resolution << std::endl;
-    std::cout << "  Thickness = " << thickness << std::endl;
-    std::cout << "  Bilinear = " << bilinear << std::endl;
-    std::cout << "  hideProgress = " << hideProgress << std::endl;
-    std::cout << "  nbSamplesMin = " << _nbSamplesMin << std::endl;
-    std::cout << "  nbSamplesMax = " << _nbSamplesMax << std::endl;
-    std::cout << "  maxIterations = " << _maxIterations << std::endl;
-    size_t computedResolution = 0;
-    if ( _nbSamplesMin != 0 ) {
-      std::cout << "  using contrained mode with nbSamples (costly!)" << std::endl;
-      mm::Sample::meshToPcFace( *inputModel,
-                                *outputModel,
-                                *textureMap,
-                                _nbSamplesMin,
-                                _nbSamplesMax,
-                                _maxIterations,
-                                thickness,
-                                bilinear,
-                                !hideProgress,
-                                computedResolution );
-    } else {
-      std::cout << "  using contrained mode with resolution " << std::endl;
-      mm::Sample::meshToPcFace(
-        *inputModel, *outputModel, *textureMap, _resolution, thickness, bilinear, !hideProgress );
-    }
-    // print the stats
-    if ( csvFileOut ) {
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) {
-        csvFileOut << "model;texture;frame;resolution;thickness;bilinear;nbSamplesMin;"
-                   << "nbSamplesMax;maxIterations;computedResolution;nbSamples" << std::endl;
+  //splitting the mesh into the different texture map images
+  std::vector<mm::Model*> inputModelSplit;
+  std::vector<int> textIdxList;
+  if (textureMapUrls.size() == 0) {
+      inputModelSplit.push_back(inputModelTotal);
+      textureMapList.push_back(new mm::Image());
+      textIdxList.push_back(0);
+  } else {
+      auto listOfIndices = inputModelTotal->triangleMatIdx;
+      std::sort(listOfIndices.begin(), listOfIndices.end());
+      listOfIndices.erase(unique(listOfIndices.begin(), listOfIndices.end()), listOfIndices.end());
+      if (listOfIndices.size() <= 1) {
+          inputModelSplit.push_back(inputModelTotal);
+          textIdxList.push_back(0);
       }
-      // print stats
-      csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << _resolution << ";"
-                 << thickness << ";" << bilinear << ";" << _nbSamplesMin << ";" << _nbSamplesMax << ";"
-                 << _maxIterations << ";" << computedResolution << ";" << outputModel->getPositionCount() << std::endl;
-      // done
-      csvFileOut.close();
-    }
-  } else if ( mode == "grid" ) {
-    std::cout << "Sampling in GRID mode" << std::endl;
-    std::cout << "  Grid Size = " << _gridSize << std::endl;
-    std::cout << "  Use Normal = " << _useNormal << std::endl;
-    std::cout << "  Bilinear = " << bilinear << std::endl;
-    std::cout << "  hideProgress = " << hideProgress << std::endl;
-    std::cout << "  nbSamplesMin = " << _nbSamplesMin << std::endl;
-    std::cout << "  nbSamplesMax = " << _nbSamplesMax << std::endl;
-    std::cout << "  maxIterations = " << _maxIterations << std::endl;
-    size_t computedResolution = 0;
-    if ( _nbSamplesMin != 0 ) {
-      std::cout << "  using contrained mode with nbSamples (costly!)" << std::endl;
-      mm::Sample::meshToPcGrid( *inputModel,
-                                *outputModel,
-                                *textureMap,
-                                _nbSamplesMin,
-                                _nbSamplesMax,
-                                _maxIterations,
-                                bilinear,
-                                !hideProgress,
-                                _useNormal,
-                                _useFixedPoint,
-                                _minPos,
-                                _maxPos,
-                                computedResolution );
-    } else {
-      std::cout << "  using contrained mode with gridSize " << std::endl;
-      mm::Sample::meshToPcGrid( *inputModel,
-                                *outputModel,
-                                *textureMap,
-                                _gridSize,
-                                bilinear,
-                                !hideProgress,
-                                _useNormal,
-                                _useFixedPoint,
-                                _minPos,
-                                _maxPos );
-    }
-    // print the stats
-    if ( csvFileOut ) {
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) {
-        csvFileOut << "model;texture;frame;mode;gridSize;useNormal;bilinear;nbSamplesMin;"
-                   << "nbSamplesMax;maxIterations;computedResolution;nbSamples" << std::endl;
+      else {
+      textIdxList = listOfIndices;
+      for (auto& texIdx : textIdxList) {
+          //spliting the input mesh
+          inputModelSplit.push_back(new mm::Model());
+          auto& inputModelSeg = inputModelSplit.back();
+          *inputModelSeg = *inputModelTotal; // copying the input
+          inputModelSeg->triangles.clear();
+              if (inputModelTotal->trianglesuv.size() > 0)
+              inputModelSeg->trianglesuv.clear();
+          auto triangleCount = inputModelTotal->getTriangleCount();
+          for (int i = 0; i < triangleCount; i++) {
+              if (inputModelTotal->triangleMatIdx[i] == texIdx) {
+                  //add the triangle
+                  inputModelSeg->triangles.push_back(inputModelTotal->triangles[3 * i]);
+                  inputModelSeg->triangles.push_back(inputModelTotal->triangles[3 * i + 1]);
+                  inputModelSeg->triangles.push_back(inputModelTotal->triangles[3 * i + 2]);
+                      if ((3 * i + 2) < inputModelTotal->trianglesuv.size()) {
+                      inputModelSeg->trianglesuv.push_back(inputModelTotal->trianglesuv[3 * i]);
+                      inputModelSeg->trianglesuv.push_back(inputModelTotal->trianglesuv[3 * i + 1]);
+                      inputModelSeg->trianglesuv.push_back(inputModelTotal->trianglesuv[3 * i + 2]);
+                      }
+                  }
+              }
+          }
       }
-      // print stats
-      csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << mode << ";" << _gridSize
-                 << ";" << _useNormal << ";" << bilinear << ";" << _nbSamplesMin << ";" << _nbSamplesMax << ";"
-                 << _maxIterations << ";" << computedResolution << ";" << outputModel->getPositionCount() << std::endl;
-      // done
-      csvFileOut.close();
-    }
-  } else if ( mode == "map" ) {
-    std::cout << "Sampling in MAP mode" << std::endl;
-    std::cout << "  hideProgress = " << hideProgress << std::endl;
-    mm::Sample::meshToPcMap( *inputModel, *outputModel, *textureMap, !hideProgress );
-    // print the stats
-    if ( csvFileOut ) {
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) { csvFileOut << "model;texture;frame;mode;nbSamples" << std::endl; }
-      // print stats
-      csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << mode << ";"
-                 << outputModel->getPositionCount() << std::endl;
-      // done
-      csvFileOut.close();
-    }
-  } else if ( mode == "sdiv" ) {
-    std::cout << "Sampling in SDIV mode" << std::endl;
-    std::cout << "  Maximum depth = " << maxDepth << std::endl;
-    std::cout << "  Area threshold = " << areaThreshold << std::endl;
-    std::cout << "  Map threshold = " << mapThreshold << std::endl;
-    std::cout << "  Bilinear = " << bilinear << std::endl;
-    std::cout << "  hideProgress = " << hideProgress << std::endl;
-    std::cout << "  nbSamplesMin = " << _nbSamplesMin << std::endl;
-    std::cout << "  nbSamplesMax = " << _nbSamplesMax << std::endl;
-    std::cout << "  maxIterations = " << _maxIterations << std::endl;
-    float computedThres = 0.0f;
-    if ( _nbSamplesMin != 0 ) {
-      std::cout << "  using contrained mode with nbSamples (costly!)" << std::endl;
-      mm::Sample::meshToPcDiv( *inputModel,
-                               *outputModel,
-                               *textureMap,
-                               _nbSamplesMin,
-                               _nbSamplesMax,
-                               _maxIterations,
-                               bilinear,
-                               !hideProgress,
-                               computedThres );
-    } else {
-      mm::Sample::meshToPcDiv(
-        *inputModel, *outputModel, *textureMap, maxDepth, areaThreshold, mapThreshold, bilinear, !hideProgress );
-    }
-    // print the stats
-    if ( csvFileOut ) {
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) {
-        csvFileOut << "model;texture;frame;mode;areaThreshold;bilinear;nbSamplesMin;"
-                   << "nbSamplesMax;maxIterations;computedThreshold;nbSamples" << std::endl;
+  }
+  for (int segIdx = 0; segIdx < inputModelSplit.size(); segIdx++) {
+      auto& inputModel = inputModelSplit[segIdx];
+      auto& textureMap = textureMapList[textIdxList[segIdx]];
+      mm::Model* outputModel = new mm::Model();
+      auto& inputTextureFilename = "";
+      if (_inputTextureFilenames.size() != 0) {
+          if(textIdxList[segIdx] < _inputTextureFilenames.size())
+              _inputTextureFilenames[textIdxList[segIdx]];
       }
-      // print stats
-      csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << mode << ";"
-                 << areaThreshold << ";" << bilinear << ";" << _nbSamplesMin << ";" << _nbSamplesMax << ";"
-                 << _maxIterations << ";" << computedThres << ";" << outputModel->getPositionCount() << std::endl;
-      // done
-      csvFileOut.close();
-    }
-  } else if ( mode == "ediv" ) {
-    std::cout << "Sampling in EDIV mode" << std::endl;
-    std::cout << "  Edge length threshold = " << lengthThreshold << std::endl;
-    std::cout << "  Resolution = " << _resolution << ( lengthThreshold != 0 ? "(skipped)" : "" ) << std::endl;
-    std::cout << "  Bilinear = " << bilinear << std::endl;
-    std::cout << "  hideProgress = " << hideProgress << std::endl;
-    std::cout << "  nbSamplesMin = " << _nbSamplesMin << std::endl;
-    std::cout << "  nbSamplesMax = " << _nbSamplesMax << std::endl;
-    std::cout << "  maxIterations = " << _maxIterations << std::endl;
-    float computedThres = 0.0f;
-    if ( _nbSamplesMin != 0 ) {
-      std::cout << "  using contrained mode with nbSamples (costly!)" << std::endl;
-      mm::Sample::meshToPcDivEdge( *inputModel,
-                                   *outputModel,
-                                   *textureMap,
-                                   _nbSamplesMin,
-                                   _nbSamplesMax,
-                                   _maxIterations,
-                                   bilinear,
-                                   !hideProgress,
-                                   computedThres );
-    } else {
-      mm::Sample::meshToPcDivEdge(
-        *inputModel, *outputModel, *textureMap, lengthThreshold, _resolution, bilinear, !hideProgress, computedThres );
-    }
-    // print the stats
-    if ( csvFileOut ) {
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) {
-        csvFileOut << "model;texture;frame;mode;resolution;lengthThreshold;bilinear;nbSamplesMin;"
-                   << "nbSamplesMax;maxIterations;computedThreshold;nbSamples" << std::endl;
+      else { 
+          if (textIdxList[segIdx] < inputModelTotal->textureMapUrls.size())
+              inputModelTotal->textureMapUrls[textIdxList[segIdx]]; 
       }
-      // print stats
-      csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << mode << ";"
-                 << _resolution << ";" << lengthThreshold << ";" << bilinear << ";" << _nbSamplesMin << ";"
-                 << _nbSamplesMax << ";" << _maxIterations << ";" << computedThres << ";"
-                 << outputModel->getPositionCount() << std::endl;
-      // done
-      csvFileOut.close();
-    }
-  } else if ( mode == "prnd" ) {
-    std::cout << "Sampling in PRND mode" << std::endl;
-    std::cout << "  nbSamples = " << _nbSamples << std::endl;
-    std::cout << "  Bilinear = " << bilinear << std::endl;
-    std::cout << "  hideProgress = " << hideProgress << std::endl;
-    mm::Sample::meshToPcPrnd( *inputModel, *outputModel, *textureMap, _nbSamples, bilinear, !hideProgress );
-    // print the stats
-    if ( csvFileOut ) {
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) {
-        csvFileOut << "model;texture;frame;mode;targetPointCount;bilinear;nbSamples" << std::endl;
+      // perform sampling
+      if (mode == "face") {
+          std::cout << "Sampling in FACE mode" << std::endl;
+          std::cout << "  Resolution = " << _resolution << std::endl;
+          std::cout << "  Thickness = " << thickness << std::endl;
+          std::cout << "  Bilinear = " << bilinear << std::endl;
+          std::cout << "  hideProgress = " << hideProgress << std::endl;
+          std::cout << "  nbSamplesMin = " << _nbSamplesMin << std::endl;
+          std::cout << "  nbSamplesMax = " << _nbSamplesMax << std::endl;
+          std::cout << "  maxIterations = " << _maxIterations << std::endl;
+          size_t computedResolution = 0;
+          if (_nbSamplesMin != 0) {
+              std::cout << "  using contrained mode with nbSamples (costly!)" << std::endl;
+              mm::Sample::meshToPcFace(*inputModel,
+                  *outputModel,
+                  *textureMap,
+                  _nbSamplesMin,
+                  _nbSamplesMax,
+                  _maxIterations,
+                  thickness,
+                  bilinear,
+                  !hideProgress,
+                  computedResolution);
+          }
+          else {
+              std::cout << "  using contrained mode with resolution " << std::endl;
+              mm::Sample::meshToPcFace(
+                  *inputModel, *outputModel, *textureMap, _resolution, thickness, bilinear, !hideProgress);
+          }
+          // print the stats
+          if (csvFileOut) {
+              // print the header if file is empty
+              if (csvFileLength == 0) {
+                  csvFileOut << "model;texture;frame;resolution;thickness;bilinear;nbSamplesMin;"
+                      << "nbSamplesMax;maxIterations;computedResolution;nbSamples" << std::endl;
+              }
+              // print stats
+              csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << _resolution << ";"
+                  << thickness << ";" << bilinear << ";" << _nbSamplesMin << ";" << _nbSamplesMax << ";"
+                  << _maxIterations << ";" << computedResolution << ";" << outputModel->getPositionCount() << std::endl;
+              // done
+              csvFileOut.close();
+          }
       }
-      // print stats
-      csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << mode << ";"
-                 << _nbSamples << ";" << bilinear << ";" << outputModel->getPositionCount() << std::endl;
-      // done
-      csvFileOut.close();
-    }
+      else if (mode == "grid") {
+          std::cout << "Sampling in GRID mode" << std::endl;
+          std::cout << "  Grid Size = " << _gridSize << std::endl;
+          std::cout << "  Use Normal = " << _useNormal << std::endl;
+          std::cout << "  Bilinear = " << bilinear << std::endl;
+          std::cout << "  hideProgress = " << hideProgress << std::endl;
+          std::cout << "  nbSamplesMin = " << _nbSamplesMin << std::endl;
+          std::cout << "  nbSamplesMax = " << _nbSamplesMax << std::endl;
+          std::cout << "  maxIterations = " << _maxIterations << std::endl;
+          size_t computedResolution = 0;
+          if (_nbSamplesMin != 0) {
+              std::cout << "  using contrained mode with nbSamples (costly!)" << std::endl;
+              mm::Sample::meshToPcGrid(*inputModel,
+                  *outputModel,
+                  *textureMap,
+                  _nbSamplesMin,
+                  _nbSamplesMax,
+                  _maxIterations,
+                  bilinear,
+                  !hideProgress,
+                  _useNormal,
+                  _useFixedPoint,
+                  _minPos,
+                  _maxPos,
+                  computedResolution);
+          }
+          else {
+              std::cout << "  using contrained mode with gridSize " << std::endl;
+              mm::Sample::meshToPcGrid(*inputModel,
+                  *outputModel,
+                  *textureMap,
+                  _gridSize,
+                  bilinear,
+                  !hideProgress,
+                  _useNormal,
+                  _useFixedPoint,
+                  _minPos,
+                  _maxPos);
+          }
+          // print the stats
+          if (csvFileOut) {
+              // print the header if file is empty
+              if (csvFileLength == 0) {
+                  csvFileOut << "model;texture;frame;mode;gridSize;useNormal;bilinear;nbSamplesMin;"
+                      << "nbSamplesMax;maxIterations;computedResolution;nbSamples" << std::endl;
+              }
+              // print stats
+              csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << mode << ";" << _gridSize
+                  << ";" << _useNormal << ";" << bilinear << ";" << _nbSamplesMin << ";" << _nbSamplesMax << ";"
+                  << _maxIterations << ";" << computedResolution << ";" << outputModel->getPositionCount() << std::endl;
+              // done
+              csvFileOut.close();
+          }
+      }
+      else if (mode == "map") {
+          std::cout << "Sampling in MAP mode" << std::endl;
+          std::cout << "  hideProgress = " << hideProgress << std::endl;
+          mm::Sample::meshToPcMap(*inputModel, *outputModel, *textureMap, !hideProgress);
+          // print the stats
+          if (csvFileOut) {
+              // print the header if file is empty
+              if (csvFileLength == 0) { csvFileOut << "model;texture;frame;mode;nbSamples" << std::endl; }
+              // print stats
+              csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << mode << ";"
+                  << outputModel->getPositionCount() << std::endl;
+              // done
+              csvFileOut.close();
+          }
+      }
+      else if (mode == "sdiv") {
+          std::cout << "Sampling in SDIV mode" << std::endl;
+          std::cout << "  Maximum depth = " << maxDepth << std::endl;
+          std::cout << "  Area threshold = " << areaThreshold << std::endl;
+          std::cout << "  Map threshold = " << mapThreshold << std::endl;
+          std::cout << "  Bilinear = " << bilinear << std::endl;
+          std::cout << "  hideProgress = " << hideProgress << std::endl;
+          std::cout << "  nbSamplesMin = " << _nbSamplesMin << std::endl;
+          std::cout << "  nbSamplesMax = " << _nbSamplesMax << std::endl;
+          std::cout << "  maxIterations = " << _maxIterations << std::endl;
+          float computedThres = 0.0f;
+          if (_nbSamplesMin != 0) {
+              std::cout << "  using contrained mode with nbSamples (costly!)" << std::endl;
+              mm::Sample::meshToPcDiv(*inputModel,
+                  *outputModel,
+                  *textureMap,
+                  _nbSamplesMin,
+                  _nbSamplesMax,
+                  _maxIterations,
+                  bilinear,
+                  !hideProgress,
+                  computedThres);
+          }
+          else {
+              mm::Sample::meshToPcDiv(
+                  *inputModel, *outputModel, *textureMap, maxDepth, areaThreshold, mapThreshold, bilinear, !hideProgress);
+          }
+          // print the stats
+          if (csvFileOut) {
+              // print the header if file is empty
+              if (csvFileLength == 0) {
+                  csvFileOut << "model;texture;frame;mode;areaThreshold;bilinear;nbSamplesMin;"
+                      << "nbSamplesMax;maxIterations;computedThreshold;nbSamples" << std::endl;
+              }
+              // print stats
+              csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << mode << ";"
+                  << areaThreshold << ";" << bilinear << ";" << _nbSamplesMin << ";" << _nbSamplesMax << ";"
+                  << _maxIterations << ";" << computedThres << ";" << outputModel->getPositionCount() << std::endl;
+              // done
+              csvFileOut.close();
+          }
+      }
+      else if (mode == "ediv") {
+          std::cout << "Sampling in EDIV mode" << std::endl;
+          std::cout << "  Edge length threshold = " << lengthThreshold << std::endl;
+          std::cout << "  Resolution = " << _resolution << (lengthThreshold != 0 ? "(skipped)" : "") << std::endl;
+          std::cout << "  Bilinear = " << bilinear << std::endl;
+          std::cout << "  hideProgress = " << hideProgress << std::endl;
+          std::cout << "  nbSamplesMin = " << _nbSamplesMin << std::endl;
+          std::cout << "  nbSamplesMax = " << _nbSamplesMax << std::endl;
+          std::cout << "  maxIterations = " << _maxIterations << std::endl;
+          float computedThres = 0.0f;
+          if (_nbSamplesMin != 0) {
+              std::cout << "  using contrained mode with nbSamples (costly!)" << std::endl;
+              mm::Sample::meshToPcDivEdge(*inputModel,
+                  *outputModel,
+                  *textureMap,
+                  _nbSamplesMin,
+                  _nbSamplesMax,
+                  _maxIterations,
+                  bilinear,
+                  !hideProgress,
+                  computedThres);
+          }
+          else {
+              mm::Sample::meshToPcDivEdge(
+                  *inputModel, *outputModel, *textureMap, lengthThreshold, _resolution, bilinear, !hideProgress, computedThres);
+          }
+          // print the stats
+          if (csvFileOut) {
+              // print the header if file is empty
+              if (csvFileLength == 0) {
+                  csvFileOut << "model;texture;frame;mode;resolution;lengthThreshold;bilinear;nbSamplesMin;"
+                      << "nbSamplesMax;maxIterations;computedThreshold;nbSamples" << std::endl;
+              }
+              // print stats
+              csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << mode << ";"
+                  << _resolution << ";" << lengthThreshold << ";" << bilinear << ";" << _nbSamplesMin << ";"
+                  << _nbSamplesMax << ";" << _maxIterations << ";" << computedThres << ";"
+                  << outputModel->getPositionCount() << std::endl;
+              // done
+              csvFileOut.close();
+          }
+      }
+      else if (mode == "prnd") {
+          std::cout << "Sampling in PRND mode" << std::endl;
+          std::cout << "  nbSamples = " << _nbSamples << std::endl;
+          std::cout << "  Bilinear = " << bilinear << std::endl;
+          std::cout << "  hideProgress = " << hideProgress << std::endl;
+          mm::Sample::meshToPcPrnd(*inputModel, *outputModel, *textureMap, _nbSamples, bilinear, !hideProgress);
+          // print the stats
+          if (csvFileOut) {
+              // print the header if file is empty
+              if (csvFileLength == 0) {
+                  csvFileOut << "model;texture;frame;mode;targetPointCount;bilinear;nbSamples" << std::endl;
+              }
+              // print stats
+              csvFileOut << inputModelFilename << ";" << inputTextureFilename << ";" << frame << ";" << mode << ";"
+                  << _nbSamples << ";" << bilinear << ";" << outputModel->getPositionCount() << std::endl;
+              // done
+              csvFileOut.close();
+          }
+      }
+      
+      //accumulate results in the output model
+      if (outputModel->hasVertices())
+          for (auto& vertex : outputModel->vertices)
+              outputModelTotal->vertices.push_back(vertex);
+
+      if (outputModel->hasNormals())
+          for (auto& normal : outputModel->normals)
+              outputModelTotal->normals.push_back(normal);
+
+      if (outputModel->hasColors())
+          for (auto& color : outputModel->colors)
+              outputModelTotal->colors.push_back(color);
+
+      if (outputModel->hasUvCoords())
+          for (auto& uvcoord : outputModel->uvcoords)
+              outputModelTotal->uvcoords.push_back(uvcoord);
   }
   clock_t t2 = clock();
   std::cout << "Time on processing: " << ( (float)( t2 - t1 ) ) / CLOCKS_PER_SEC << " sec." << std::endl;
 
   // save the result
-  if ( mm::IO::saveModel( outputModelFilename, outputModel ) ) return true;
+  if ( mm::IO::saveModel( outputModelFilename, outputModelTotal ) ) return true;
   else return false;
 }

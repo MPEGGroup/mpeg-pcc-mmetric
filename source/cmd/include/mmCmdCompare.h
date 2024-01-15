@@ -30,7 +30,7 @@ class CmdCompare : Command {
   Context* _context;
   // the command options
   std::string _inputModelAFilename, _inputModelBFilename;
-  std::string _inputTextureAFilename, _inputTextureBFilename;
+  std::vector<std::string> _inputTextureAFilenames, _inputTextureBFilenames;
   std::string _outputModelAFilename, _outputModelBFilename;
   std::string _outputCsvFilename;
   // the type of processing

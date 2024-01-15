@@ -54,7 +54,7 @@ bool CmdAnalyse::initialize( Context* context, std::string app, int argc, char* 
 		options.add_options()
 			("inputModel", "path to input model (obj or ply file)",
 				cxxopts::value<std::string>())
-			("inputMap", "path to input texture map (png, jpeg)",
+			("inputMap", "path to input texture map (png, jpeg), can be multiple paths surrounded by double quotes and separated by spaces.",
 				cxxopts::value<std::string>())
 			("outputCsv", "optional path to output results file",
 				cxxopts::value<std::string>())
@@ -74,7 +74,9 @@ bool CmdAnalyse::initialize( Context* context, std::string app, int argc, char* 
     // Optional
     if ( result.count( "inputModel" ) ) _inputModelFilename = result["inputModel"].as<std::string>();
     // Optional
-    if ( result.count( "inputMap" ) ) _inputTextureFilename = result["inputMap"].as<std::string>();
+    if ( result.count( "inputMap" ) ) { 
+        splitString( result["inputMap"].as<std::string>(), _inputTextureFilenames ); 
+    }
     // Optional
     if ( result.count( "outputCsv" ) ) _outputCsvFilename = result["outputCsv"].as<std::string>();
     // Optional
@@ -88,15 +90,22 @@ bool CmdAnalyse::initialize( Context* context, std::string app, int argc, char* 
 }
 
 bool CmdAnalyse::process( uint32_t frame ) {
-  // Reading map if needed
-  mm::Image* textureMap = NULL;
-  if ( _inputTextureFilename != "" ) { textureMap = mm::IO::loadImage( _inputTextureFilename ); }
 
   // the input
   mm::Model* inputModel = NULL;
   if ( _inputModelFilename != "" ) {
-    if ( ( inputModel = mm::IO::loadModel( _inputModelFilename ) ) == NULL ) { return false; }
+    if ( ( inputModel = mm::IO::loadModel( _inputModelFilename ) ) == NULL ) { 
+        return false; 
+    }
   }
+
+  // now handle the textures
+  std::vector<std::string> textureMapUrls =
+    _inputTextureFilenames.size() != 0 ? _inputTextureFilenames : inputModel->textureMapUrls;
+  std::vector<mm::Image*> textureMapList;
+
+  // does nothing if lists are empty
+  mm::IO::loadImages( textureMapUrls, textureMapList ); 
 
   // create or open in append mode output csv if needed
   std::ofstream fout;
@@ -120,12 +129,19 @@ bool CmdAnalyse::process( uint32_t frame ) {
 
   // analyse the model if any
   if ( inputModel != NULL ) {
+      //checking the number of texture maps
+      auto materialIndices = inputModel->triangleMatIdx;
+      std::sort(materialIndices.begin(), materialIndices.end());
+      auto uniqCnt = std::unique(materialIndices.begin(), materialIndices.end());
+      materialIndices.resize(std::distance(materialIndices.begin(), uniqCnt));
+
     _counts.push_back( std::make_tuple( _context->getFrame(),
                                         (double)inputModel->triangles.size() / 3,
                                         (double)inputModel->vertices.size() / 3,
                                         (double)inputModel->colors.size() / 3,
                                         (double)inputModel->normals.size() / 3,
-                                        (double)inputModel->uvcoords.size() / 2 ) );
+                                        (double)inputModel->uvcoords.size() / 2,
+                                        (double)materialIndices.size()));
 
     mm::Geometry::computeBBox( inputModel->vertices, minPos, maxPos );
     mm::Geometry::computeBBox( _minPos, _maxPos, minPos, maxPos, _minPos, _maxPos );
@@ -147,8 +163,12 @@ bool CmdAnalyse::process( uint32_t frame ) {
     // count isolated vertices ?
   }
 
-  // analyse the texture if any
-  if ( textureMap != NULL ) {}
+  // analyse the textures if any
+  for ( auto image: textureMapList ) {
+    if (image) {
+       // do something on the current image
+    }
+  }
 
   // print to output csv if needed
   if ( fout ) {
@@ -156,13 +176,13 @@ bool CmdAnalyse::process( uint32_t frame ) {
     if ( frame == _context->getFirstFrame() ) {
       fout << "frame";
       if ( inputModel != NULL ) {
-        fout << ";triangles;vertices;uvcoords;colors;normals"
+        fout << ";triangles;vertices;uvcoords;colors;normals;materials"
              << ";minPosX;minPosY;minPosZ;maxPosX;maxPosY;maxPosZ"
              << ";minU;minV;maxU;maxV"
              << ";minColR;minColG;minColB;maxColR;maxColB;maxColB"
              << ";minNrmY;minNrmY;minNrmZ;maxNrmY;maxNrmY;maxNrmZ";
       }
-      if ( textureMap != NULL ) {
+      if ( textureMapList.size() != 0 ) {
         fout << "";  // nothing yet
       }
       fout << std::endl;
@@ -172,7 +192,7 @@ bool CmdAnalyse::process( uint32_t frame ) {
     if ( inputModel != NULL ) {
       fout << ";" << inputModel->triangles.size() / 3 << ";" << inputModel->vertices.size() / 3 << ";"
            << inputModel->normals.size() / 3 << ";" << inputModel->colors.size() / 3 << ";"
-           << inputModel->uvcoords.size() / 2 << ";" << minPos[0] << ";" << minPos[1] << ";" << minPos[2] << ";"
+           << inputModel->uvcoords.size() / 2 << ";" << inputModel->textureMapUrls.size() << ";" << minPos[0] << ";" << minPos[1] << ";" << minPos[2] << ";"
            << maxPos[0] << ";" << maxPos[1] << ";" << maxPos[2];
       if ( inputModel->uvcoords.size() ) {
         fout << ";" << minUv[0] << ";" << minUv[1] << ";" << maxUv[0] << ";" << maxUv[1];
@@ -222,20 +242,23 @@ bool CmdAnalyse::finalize() {
 
     mm::Statistics::Results stats;
     mm::Statistics::compute(
-      _counts.size(), [&]( size_t i ) -> double { return std::get<1>( _counts[i] ); }, stats );
+      _counts.size(), [&]( size_t i ) -> double { return std::get<1>( _counts[i] ); }, stats , std::numeric_limits<double>::max());
     mm::Statistics::printToLog( stats, "globalTriangleCount", *out[i] );
     mm::Statistics::compute(
-      _counts.size(), [&]( size_t i ) -> double { return std::get<2>( _counts[i] ); }, stats );
+      _counts.size(), [&]( size_t i ) -> double { return std::get<2>( _counts[i] ); }, stats, std::numeric_limits<double>::max());
     mm::Statistics::printToLog( stats, "globalVertexCount", *out[i] );
     mm::Statistics::compute(
-      _counts.size(), [&]( size_t i ) -> double { return std::get<3>( _counts[i] ); }, stats );
+      _counts.size(), [&]( size_t i ) -> double { return std::get<3>( _counts[i] ); }, stats, std::numeric_limits<double>::max());
     mm::Statistics::printToLog( stats, "globalColorCount", *out[i] );
     mm::Statistics::compute(
-      _counts.size(), [&]( size_t i ) -> double { return std::get<4>( _counts[i] ); }, stats );
+      _counts.size(), [&]( size_t i ) -> double { return std::get<4>( _counts[i] ); }, stats, std::numeric_limits<double>::max());
     mm::Statistics::printToLog( stats, "globalNormalCount", *out[i] );
     mm::Statistics::compute(
-      _counts.size(), [&]( size_t i ) -> double { return std::get<5>( _counts[i] ); }, stats );
+      _counts.size(), [&]( size_t i ) -> double { return std::get<5>( _counts[i] ); }, stats, std::numeric_limits<double>::max());
     mm::Statistics::printToLog( stats, "globalUvCoordCount", *out[i] );
+    mm::Statistics::compute(
+        _counts.size(), [&](size_t i) -> double { return std::get<6>(_counts[i]); }, stats, std::numeric_limits<double>::max());
+    mm::Statistics::printToLog(stats, "globalTextureCount", *out[i]);
 
     *out[i] << "globalMinPos=\"" << _minPos[0] << " " << _minPos[1] << " " << _minPos[2] << "\"" << std::endl;
     *out[i] << "globalMaxPos=\"" << _maxPos[0] << " " << _maxPos[1] << " " << _maxPos[2] << "\"" << std::endl;

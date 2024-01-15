@@ -77,6 +77,9 @@ class Model {
   std::vector<float>       faceNormals;  // per triangle normals (x,y,z)
   std::vector<int>         triangles;    // triangle position indices
   std::vector<int>         trianglesuv;  // triangle uv indices
+  std::vector<int>         triangleMatIdx;  // material index for the triangle 
+  std::vector<std::string> materialNames;   // list of material names from .mtl file
+  std::vector<std::string> textureMapUrls;  // list of texture urls from the optional material file(s)
   // topology/neighborhood information
   // set of triangle associated with a vertex index (the key)
   std::map<size_t, std::set<size_t>> perVertexTriangles;
@@ -541,6 +544,8 @@ inline bool reorder( const Model& input, std::string sorting, Model& output ) {
     Vertex v1, v2, v3;
     fetchTriangle( input, triIdx, hasUvCoord, hasColor, hasNormal, v1, v2, v3 );
     builder.pushTriangle( v1, v2, v3 );
+    if (triIdx < input.triangleMatIdx.size())
+        reindexed.triangleMatIdx.push_back(input.triangleMatIdx[triIdx]);
   }
 
   // B - second sort the vertices
@@ -581,6 +586,13 @@ inline bool reorder( const Model& input, std::string sorting, Model& output ) {
   for ( size_t vertIdx = 0; vertIdx < output.triangles.size(); ++vertIdx ) {
     output.triangles[vertIdx] = vertexTranslate[reindexed.triangles[vertIdx]];
   }
+  output.triangleMatIdx.resize(reindexed.triangleMatIdx.size());
+  for (size_t vertIdx = 0; vertIdx < output.triangleMatIdx.size(); ++vertIdx) {
+      output.triangleMatIdx[vertIdx] = reindexed.triangleMatIdx[vertIdx];
+  }
+  output.header = input.header;       // mostly for OBJ material
+  output.materialNames = input.materialNames;   // list of material names from .mtl file
+  output.textureMapUrls = input.textureMapUrls;  // list of texture urls from the optional material file(s)
 
   if ( sorting == "vertex" ) return true;
 
@@ -615,19 +627,25 @@ inline bool reorder( const Model& input, std::string sorting, Model& output ) {
   }
 
   // sort face triplets
-  std::set<std::array<int, 3>> tripletsSet;
+  std::set<std::array<int, 4>> tripletsSet;
+  std::vector<int> textIdxList;
   for ( size_t triIdx = 0; triIdx < output.triangles.size() / 3; ++triIdx ) {
-    tripletsSet.insert({ { output.triangles[triIdx * 3 + 0],output.triangles[triIdx * 3 + 1],output.triangles[triIdx * 3 + 2] } });
+      int triangleMatIndex = (triIdx < output.triangleMatIdx.size()) ? output.triangleMatIdx[triIdx] : -1;
+    tripletsSet.insert({ { output.triangles[triIdx * 3 + 0],output.triangles[triIdx * 3 + 1],output.triangles[triIdx * 3 + 2], triangleMatIndex } });
   }
   size_t triIdx = 0;
   for (const auto& t : tripletsSet)
   {
     output.triangles[triIdx * 3 + 0] = t[0];
     output.triangles[triIdx * 3 + 1] = t[1];
-    output.triangles[triIdx++ * 3 + 2] = t[2];
+    output.triangles[triIdx * 3 + 2] = t[2];
+    if(triIdx < output.triangleMatIdx.size() )
+        output.triangleMatIdx[triIdx] = t[3];
+    triIdx++;
   }
   // adjust size in case multiple identical triangles where detected after reordering
   output.triangles.resize(3 * triIdx);
+  output.triangleMatIdx.resize(triIdx);
 
   return true;
 }

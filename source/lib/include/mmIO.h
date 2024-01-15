@@ -51,6 +51,26 @@ class IO {
   // return NULL in case of error
   static Image* loadImage( std::string templateName );
 
+  // load list of images from files and images from videos
+  // empty string urls are skipped silently and null is stored, but it is not considered an error (see materials without map)
+  // names in imageUrlList can be filename or "ID:xxxx"
+  // fills the images vector with images, some may be NULL in case of error
+  // returns false if at least one image load failed
+  static bool loadImages( const std::vector< std::string >& imageUrlList, std::vector<mm::Image*>& images );
+
+  // returns the image of index mapIdx
+  // It may fallback to first image the index does not exist
+  // It may return null if the image of index Idx is null or if images is empty.
+  // Result must be checked before use
+  inline Image* selectImage( std::vector<mm::Image*>& images, int mapIdx ) {
+    if ( mapIdx < images.size() ) 
+        return images[mapIdx];
+    if ( images.size() != 0 )
+        return images[0];
+    return 0;  
+  }
+
+
   /*
   static bool saveImage(std::string name, Image* image);*/
 
@@ -84,7 +104,11 @@ class IO {
   static bool _saveImage( std::string filename, const Image& input, bool flipVertically = false );
   static bool _loadImageFromVideo( std::string filename, Image& output );
 
-  static std::string getTextureMapPathFromMTL( const std::string& mtl );
+  static void getTextureMapPathFromMTL( 
+      const std::string& path, 
+      const std::string& mtl,
+      std::vector<std::string>& materialName,
+      std::vector<std::string>& textMapFilename );
 };
 
 }  // namespace mm

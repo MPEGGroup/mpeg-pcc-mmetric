@@ -30,7 +30,7 @@ class CmdSample : Command {
   Context* _context;
   // the command options
   std::string inputModelFilename;
-  std::string inputTextureFilename;
+  std::vector<std::string> _inputTextureFilenames;
   std::string outputModelFilename;
   std::string _outputCsvFilename;
   bool        hideProgress = false;

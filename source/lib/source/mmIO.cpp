@@ -27,6 +27,7 @@
 #include <unordered_map>
 #include <time.h>
 #include <cmath>
+#include <filesystem>
 // ply loader
 #define TINYPLY_IMPLEMENTATION
 #include "tinyply.h"
@@ -144,6 +145,19 @@ Image* IO::loadImage( std::string templateName ) {
   IO::_images[name] = image;
   return image;
 };
+
+bool IO::loadImages( const std::vector<std::string>& imageUrlList, std::vector<mm::Image*>& images ) {
+  bool res = true;
+  for ( auto url : imageUrlList ) {
+    if ( url.size() != 0 ) {
+      images.push_back( mm::IO::loadImage( url ) );  // thus if fails, the element of the array contains NULL
+      res = res && ( images.back() != NULL );
+    } else {
+      images.push_back( NULL ); // not an error
+    }
+  }
+  return res;
+}
 
 /*
 bool  IO::saveImage(std::string name, Image* image) {
@@ -335,21 +349,38 @@ public:
     }
     // reads a line and append to s, current head must be valid
     // returns new head, 
-    // not efficient
     inline char* getLine(std::string& s) {
         char c;
         while (getChar(c) < end && c != '\n' && c != '\r') {
             s.push_back(c);
-        } 
+        }
         // put back the last getChar, since it was a special char
         readBack(1);
+
         // eat eventual additional end of line special characters
         if (head != end) {
             while (getChar(c) < end && (c == '\n' || c == '\r')) { // we skip
-                if (c == '\n') {++lc; ls = head; }
+                if (c == '\n') {++lc;ls = head;}
             }
             // put back the last getChar, since it was not a special char
             readBack(1);
+        }
+        return head;
+    }
+    // reads a word (space separator) and append to s, current head must be valid
+    // returns new head,
+    inline char* getWord( std::string& s ) {
+        char c;
+        while ( getChar( c ) != end && c != ' ' && c != '\n' && c != '\r' ) {
+            s.push_back( c );
+        }  // \n or \r was read but not pushed
+        // eat eventual additional end of line special characters
+        if ( head != end ) {
+            while ( getChar( c ) != end && ( c == '\n' || c == '\r' ) ) {  // we skip
+                if ( c == '\n' ) ++lc;
+            }
+            // put back the last getChar, since it was not a special char
+            readBack( 1 );
         }
         return head;
     }
@@ -359,7 +390,7 @@ public:
     inline char* skipSpaces() {
         char c;
         while (getChar(c) < end && isspace(c)) {  // we skip
-            if (c == '\n') {++lc; ls = head; }
+            if (c == '\n') {++lc; ls = head;}
         }
         // last char is not a apsce or special, we readback
         return readBack(1);
@@ -376,7 +407,7 @@ public:
         // eat eventual additional end of line special characters
         while (head < end && getChar(c) < end && (c == '\n' || c == '\r')) {
             // we skip
-            if (c == '\n') {++lc; ls = head; }// count a new line
+            if (c == '\n') {++lc; ls = head; } // count a new line
         }
         // put back the last getChar, since it was not a special char
         readBack(1);
@@ -426,16 +457,23 @@ public:
 
 bool IO::_loadObj(std::string filename, Model& output) {
 
+    // find path to file for material loading
+    std::string path = std::filesystem::path( filename ).parent_path().string();
+    if (path == "")
+        path = ".";
+
     // open file and load in memory
     iBuffer bs; // the bitstream
     if (!bs.load(filename))
         return false;
     //
     char c = 0; // current character
+    std::string token; // buffer to build some tokens of more than one char
     int nIdxCount = 0;  // number of normal indices read
     int uvIdxCount = 0; // number of uv indices read
     int nbTessPol = 0;  // number of polygons/quads tesselated
     int nbTessAdd = 0;  // number of triangles added by tesselation
+    int matIdx = 0; // the material index, 0 by default (only used if multiple textures are present, indicated by a list of materials inside the material library file
     // consume the first character
     if ((bs.skipSpaces() == bs.end) || (bs.getChar(c) == bs.end))
         return false;
@@ -575,6 +613,7 @@ bool IO::_loadObj(std::string filename, Model& output) {
                     output.trianglesuv.push_back(indices[i][1] - 1);
                     // no normal index table for the time being
                 }
+                output.triangleMatIdx.push_back(matIdx);
                 // triangulate eventual quad or polygon from first vertex
                 // tri 0 -> 0 1 2 (the main one already done)
                 // tri 1 -> 0 2 3 si=2
@@ -588,18 +627,44 @@ bool IO::_loadObj(std::string filename, Model& output) {
                         output.triangles.push_back(indices[si + ci][0] - 1);
                         output.trianglesuv.push_back(indices[si + ci][1] - 1);
                     }
+                    output.triangleMatIdx.push_back(matIdx);
                 }
                 nbTessPol += (int)(numValidIndices > 3);
                 nbTessAdd += numValidIndices - 3;
             }
         }
-        else if (c == 'm') { // material lib (key is 'mtllib', but no other starts with 'm')
-            // TODO: off course it is not the proper way to handle materials.
-            output.header = "m";
-            bs.getLine(output.header); // push the rest of the line to the header
-            bs.readBack(1); // push back the end of line symbol so generic skipLine will work
+        else if (c == 'm') { 
+            token="m";
+            if ( bs.getWord( token ) != bs.end && token == "mtllib" ) {
+                std::string materialLibFilename;
+                if ( bs.skipSpaces() != bs.end ) {
+                    bs.getLine( materialLibFilename );  
+                }
+                // if there is already a material in the header we push 
+                // a line breck before adding an additional material
+                if ( output.header.size() != 0 ) output.header += '\n';
+                output.header += "mtllib ";
+                output.header += materialLibFilename; 
+                getTextureMapPathFromMTL( path, materialLibFilename, output.materialNames, output.textureMapUrls );
+                bs.readBack(1); // push back the end of line symbol so generic skipLine will work
+            } 
         }
-
+        
+        else if (c == 'u') {
+            token = "u";
+            if ( bs.getWord( token ) != bs.end && token == "usemtl" ) {
+                // the materialIndex may be updated at this point
+                std::string materialName;
+                if ( bs.skipSpaces() != bs.end ) { bs.getLine( materialName ); }
+                for ( int i = 0; i < output.materialNames.size(); i++ ) {
+                    if ( materialName == output.materialNames[i] ) {
+                        matIdx = i;
+                        break;
+                    }
+                }
+                bs.readBack( 1 );  // push back the end of line symbol so generic skipLine will work
+            }
+        }
 
         // purge eventual end of line
         // This silent skip unsupported tags or errors
@@ -771,7 +836,7 @@ bool IO::_saveObj(std::string filename, const Model& input) {
 
     Encode(input.header.data(), input.header.size(), bs);
     Encode("\n", 1, bs);
-
+    int refTextId = input.triangleMatIdx.size() == 0 ? -1 : input.triangleMatIdx[0];
     for (int i = 0; i < input.vertices.size() / 3; i++) {
         Encode("v", 1, bs);
         for (auto c = 0; c < 3; ++c) {
@@ -803,9 +868,21 @@ bool IO::_saveObj(std::string filename, const Model& input) {
         Encode("\n", 1, bs);
     }
     if (input.hasUvCoords()) {
-        Encode("usemtl material0000\n", 20, bs);
+        if (input.materialNames.size() > 0) {
+            std::string materialName = "usemtl " + input.materialNames[refTextId] + "\n";
+            Encode(materialName.data(), materialName.size(), bs);
+        }
+        else
+            Encode("usemtl material0000\n", 20, bs);
     }
     for (int i = 0; i < input.triangles.size() / 3; i++) {
+        if (input.hasUvCoords() && refTextId != -1){
+            if(input.triangleMatIdx[i] != refTextId) {
+                refTextId = input.triangleMatIdx[i];
+                std::string materialName = "usemtl " + input.materialNames[refTextId] + "\n";
+                Encode(materialName.data(), materialName.size(), bs);
+            }
+        }
         if (input.trianglesuv.size() == input.triangles.size()) {
             Encode("f ", 2, bs);
             for (auto c = 0; c < 3; ++c) {
@@ -1271,25 +1348,47 @@ bool IO::_loadImageFromVideo( std::string filename, Image& output ) {
   return true;
 }
 
-std::string IO::getTextureMapPathFromMTL( const std::string& mtl ) {
-  std::string ret = "";
-  if ( mtl != "" ) {
-    std::ifstream fin;
-    fin.open( mtl.c_str(), std::ios::in );
-    if ( !fin ) {
-      std::cerr << "Error: can't open file " << mtl << std::endl;
-    } else {
-      std::string line;
-      while ( std::getline( fin, line ) ) {
-        line.erase(
-          std::unique( line.begin(), line.end(), [=]( char l, char r ) { return ( l == r ) && ( l == ' ' ); } ),
-          line.end() );
-        if ( line.find_first_not_of( ' ' ) != std::string::npos ) {
-          line = line.substr( line.find_first_not_of( ' ' ) );
+// TODO we should better test if mtl already contains a path or not. and append only if needed.
+// currently, if mtl or map_Kd contains absolute path (which is rare) will not work.
+void IO::getTextureMapPathFromMTL( 
+    const std::string&        path,
+    const std::string&        mtl,
+    std::vector<std::string>& materialName,
+    std::vector<std::string>& textMapFilename ) 
+{
+    std::string ret = "";
+    if (mtl != "") {
+        std::ifstream fin;
+        fin.open( (path + "/" + mtl).c_str(), std::ios::in );
+        if (!fin) {
+            std::cerr << "Error: can't open file " << mtl << std::endl;
         }
-        if ( line.rfind( "map_Kd", 0 ) == 0 ) { return line.substr( line.find( ' ' ) + 1 ); }
-      }
+        else { 
+            std::string line;
+            while (std::getline(fin, line)) {
+                /* JEM: no idea what this is for, since we do some rfind, no need to skip anything (right ?) 
+                line.erase(
+                    std::unique(line.begin(), line.end(), [=](char l, char r) { return (l == r) && (l == ' '); }),
+                    line.end());
+                if (line.find_first_not_of(' ') != std::string::npos) {
+                    line = line.substr(line.find_first_not_of(' '));
+                }*/
+                // attention, we can have some materials without texture mapsc
+                if ( line.rfind( "newmtl", 0 ) == 0 ) { 
+                    materialName.push_back( line.substr( line.find( ' ' ) + 1 ) );
+                    textMapFilename.push_back( "" );
+                }
+                if ( line.rfind( "map_Kd", 0 ) == 0 ) {
+                    // sets or overwrites the map name for current material
+                    // skip if no material exists
+                    if ( textMapFilename.size() != 0 ) {
+                        textMapFilename.back() = path + "/" + line.substr( line.find( ' ' ) + 1 );
+                    } else {
+                        // malformed material file
+                    }
+                }
+            }
+        }
+        fin.close();
     }
-  }
-  return ret;
 }

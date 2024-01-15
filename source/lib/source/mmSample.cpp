@@ -695,7 +695,7 @@ void Sample::meshToPcDiv( const Model& input,
 
 //                      //
 //          v2          //
-//   		    /\          //
+//          /\          //
 //         /  \         //
 //     e1 /----\ e2     //
 //       / \  / \       //

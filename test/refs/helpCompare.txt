@@ -5,9 +5,11 @@ Usage:
       --inputModelA arg   path to reference input model (obj or ply file)
       --inputModelB arg   path to distorted input model (obj or ply file)
       --inputMapA arg     path to reference input texture map (png, jpg, rgb,
-                          yuv)
+                          yuv), can be multiple paths surrounded by double
+                          quotes and separated by spaces.
       --inputMapB arg     path to distorted input texture map (png, jpg, rgb,
-                          yuv)
+                          yuv), can be multiple paths surrounded by double
+                          quotes and separated by spaces.
       --outputModelA arg  path to output model A (obj or ply file)
       --outputModelB arg  path to output model B (obj or ply file)
       --outputCsv arg     filename of the file where per frame statistics
