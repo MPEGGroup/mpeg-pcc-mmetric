@@ -21,6 +21,12 @@ echo $OUT
 $CMD compare --mode eqTFAN --inputModelA ${DATA}/testA_non-manifold.obj --inputModelB ${DATA}/testB_non-manifold.obj > ${TMP}/${OUT}.txt 2>&1
 fileHasString ${TMP}/${OUT}.txt "meshes are not equal" 1
 
+#meshes with special non-manifold
+OUT=compare_eqTFAN_mesh_test_special_non-manifold
+echo $OUT
+$CMD compare --mode eqTFAN --inputModelA ${DATA}/special-non-manifold_testA.obj --inputModelB ${DATA}/special-non-manifold_testB.obj > ${TMP}/${OUT}.txt 2>&1
+fileHasString ${TMP}/${OUT}.txt "meshes are equal" 1
+
 #meshes with repeatingfaces
 OUT=compare_eqTFAN_mesh_test_repeatingfaces
 echo $OUT

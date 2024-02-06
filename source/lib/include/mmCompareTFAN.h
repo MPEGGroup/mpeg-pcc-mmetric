@@ -40,7 +40,7 @@ namespace mm {
 		void ComputeAdjacency(const Model& inputA, const Model& inputB, const std::vector<int>& trianglesA, const std::vector<float>& verticesA, const std::vector<int>& trianglesB, const std::vector<float>& verticesB, VectIntVect& vertex2VertexA, VectIntVect& vertex2VertexB, VectIntVect& vertex2TriangleA, VectIntVect& vertex2TriangleB, VectIntVect& triangle2TriangleA, VectIntVect& triangle2TriangleB, int compNum);
 
 		bool getTrianglesFansStatus(bool unoriented, const Model& inputA,
-			int focusVertexA, std::vector<int>& VLA, std::vector<int>& tagsV_A,
+			int focusVertexA, std::vector<int>& VLA, std::vector<int>& tagsV_A, std::vector<int>& tagsV_A_temp,
 			std::vector<int>& vertexMap_A, int& vertexCount_A, VectIntVect& triangleFans, IntVect sortedConquestedVLA, IntVect& nbrFans_A, IntVect& degree_A, IntVect& cases_A, IntVect& ops_A, IntVect& vertices_A);
 
 		void compareTriangleFans(const Model& inputA, const Model& inputB, bool& unoriented, const std::vector<int>& trianglesA,
@@ -48,17 +48,16 @@ namespace mm {
 			const std::vector<float>& verticesB, int focusVertex, bool& found, int& vertexCountA, std::vector<int>& vertexMapA, std::vector<int>& tagsVA, std::vector<int>& tagsTA, int& vertexCountB, std::vector<int>& vertexMapB, std::vector<int>& tagsVB, std::vector<int>& tagsTB, VectIntVect& vertexMapTemList, VectIntVect& tagsVTempList, VectIntVect& tagsTTempList, IntVect& vertexCountTempList, VectIntVect& vertex2TriangleA, VectIntVect& vertex2TriangleB, int compNum);
 
 		bool buildTriangleFanA(const Model& inputA, bool unoriented, const std::vector<int>& trianglesA, const std::vector<float>& verticesA, int focusVertexA, IntVect& tagsTA,
-			std::vector<VectIntVect>& triangleFansList, std::vector<int>& TLA, IntMultiVect& triangle2Triangle_temp, int& referTmin, int& referNextT, bool& remainTriangles);
+			std::vector<VectIntVect>& triangleFansList, std::vector<int>& TLA, IntMultiVect& triangle2Triangle_temp, int& referTmin, int& referNextT, bool& remainTriangles, int& compNum);
 
-		bool buildTriangleFanB(const Model& inputA, bool unoriented, const std::vector<int>& trianglesA, const std::vector<float>& verticesA, int focusVertexA, IntVect& tagsTA,
-			VectIntVect& tagsTListA, std::vector<VectIntVect>& triangleFansList, std::vector<int>& TLA, IntMultiVect& triangle2Triangle_temp,
+		bool buildTriangleFanB(const Model& inputA, bool unoriented, const std::vector<int>& trianglesA, const std::vector<float>& verticesA, int focusVertexA, IntVect& tagsTA, IntVect& tagsV_B_temp, VectIntVect& tagsV_B_Temp, VectIntVect& tagsTListA, std::vector<VectIntVect>& triangleFansList, std::vector<int>& TLA, IntMultiVect& triangle2Triangle_temp,
 			const std::vector<int>& referInput1, const std::vector<float>& referInput2, int& referTmin, int& referNextT, int referFocusVertex,
 			IntVect& remainFlagList, int compNum);
 
 		bool processTriangle(const Model& inputA, bool unoriented, const std::vector<int>& trianglesA, const std::vector<float>& verticesA, int focusVertexA, IntVect& tagsTA,
 			std::vector<int>& vertexMap_A, IntVect& sortedConquestedVLA, std::vector<int>& TLA, IntMultiVect& triangle2Triangle, IntVect& vfan_degeneratedface, VectIntVect& vertex2TriangleA, int compNum);
 
-		bool computeTriangleFan(const Model& inputA, const std::vector<int>& trianglesA, int focusVertexA, int tMin, IntMultiVect& triangle2Triangle, std::vector<int>& TLA, std::vector<int>& tagsT_A, VectIntVect& triangleFans, int& referTmin, int& referNextT, bool       computeflag);
+		bool computeTriangleFan(const Model& inputA, const std::vector<int>& trianglesA, const std::vector<float>& verticesA, const std::vector<float>& referInput2, int focusVertexA, int tMin, IntMultiVect& triangle2Triangle, std::vector<int>& TLA, std::vector<int>& tagsT_A, VectIntVect& triangleFans, int& referTmin, int& referNextT, const std::vector<int>& referInput1, bool computeflag, int& compNum);
 
 		bool compareConnectivity(const Model& inputA, const Model& inputB,
 			bool unoriented, const std::vector<int>& trianglesA,

@@ -111,7 +111,7 @@ bool CompareTFAN::processTriangle(const Model& inputA, bool unoriented, const st
 	return true;
 }
 bool CompareTFAN::buildTriangleFanA(const Model& inputA, bool unoriented, const std::vector<int>& trianglesA, const std::vector<float>& verticesA, int focusVertexA, IntVect& tagsTA,
-	std::vector<VectIntVect>& triangleFansList, std::vector<int>& TLA, IntMultiVect& triangle2Triangle_temp, int& referTmin, int& referNextT, bool& remainTriangles) {
+	std::vector<VectIntVect>& triangleFansList, std::vector<int>& TLA, IntMultiVect& triangle2Triangle_temp, int& referTmin, int& referNextT, bool& remainTriangles, int& compNum) {
 	if (TLA.size() != 0) {
 		int tMin = 0;
 		int connecMin = 0;
@@ -122,7 +122,7 @@ bool CompareTFAN::buildTriangleFanA(const Model& inputA, bool unoriented, const 
 		std::vector<std::vector<int>> nextTLists;
 		VectIntVect triangleFans;
 		bool computeflag = true; // compute triangleA, flag as a switch
-		computeTriangleFan(inputA, trianglesA, focusVertexA, tMin, triangle2Triangle_temp, TLA, tagsTA, triangleFans, referTmin, referNextT, computeflag);
+		computeTriangleFan(inputA, trianglesA, verticesA, verticesA, focusVertexA, tMin, triangle2Triangle_temp, TLA, tagsTA, triangleFans, referTmin, referNextT, trianglesA, computeflag, compNum);
 		if (triangleFans.size() != 0) {
 			triangleFansList.push_back(triangleFans);
 		}
@@ -138,8 +138,7 @@ bool CompareTFAN::buildTriangleFanA(const Model& inputA, bool unoriented, const 
 	}
 	return true;
 }
-bool CompareTFAN::buildTriangleFanB(const Model& inputA, bool unoriented, const std::vector<int>& trianglesA, const std::vector<float>& verticesA, int focusVertexA, IntVect& tagsTA,
-	VectIntVect& tagsTListA, std::vector<VectIntVect>& triangleFansList, std::vector<int>& TLA, IntMultiVect& triangle2Triangle_temp, const std::vector<int>& referInput1, const std::vector<float>& referInput2, int& referTmin, int& referNextT, int referFocusVertex, IntVect& remainFlagList, int compNum) {
+bool CompareTFAN::buildTriangleFanB(const Model& inputA, bool unoriented, const std::vector<int>& trianglesA, const std::vector<float>& verticesA, int focusVertexA, IntVect& tagsTA, IntVect& tagsV_B_temp, VectIntVect& tagsV_B_Temp, VectIntVect& tagsTListA, std::vector<VectIntVect>& triangleFansList, std::vector<int>& TLA, IntMultiVect& triangle2Triangle_temp, const std::vector<int>& referInput1, const std::vector<float>& referInput2, int& referTmin, int& referNextT, int referFocusVertex, IntVect& remainFlagList, int compNum) {
 
 	int tMin = 0;
 	int connecMin = 0;
@@ -215,9 +214,10 @@ bool CompareTFAN::buildTriangleFanB(const Model& inputA, bool unoriented, const 
 					//compute triangle FAN
 					VectIntVect triangleFan(triangleFans);
 					bool computeflag = false;  // compute triangleB
-					computeTriangleFan(inputA, trianglesA, focusVertexA, tMinL[i], triangle2TriangleTemp, TLA, tagsTATemp, triangleFan, referTmin, referNextT, computeflag);
+					computeTriangleFan(inputA, trianglesA, verticesA, referInput2, focusVertexA, tMinL[i], triangle2TriangleTemp, TLA, tagsTATemp, triangleFan, referTmin, referNextT, referInput1, computeflag, compNum);
 					triangleFansList.push_back(triangleFan);
 					tagsTListA.push_back(tagsTATemp);
+					tagsV_B_Temp.push_back(tagsV_B_temp);
 					bool remainTriangles = false;
 					for (int i = 0; i < TLA.size(); i++) {
 						if (tagsTATemp[TLA[i]] == 0) {
@@ -233,9 +233,10 @@ bool CompareTFAN::buildTriangleFanB(const Model& inputA, bool unoriented, const 
 				VectIntVect triangleFan(triangleFans);
 				IntVect tagsTATemp(tagsTA);
 				bool computeflag = false; // compute triangleB
-				computeTriangleFan(inputA, trianglesA, focusVertexA, tMinL[i], triangle2Triangle_temp, TLA, tagsTATemp, triangleFan, referTmin, referNextT, computeflag);
+				computeTriangleFan(inputA, trianglesA, verticesA, referInput2, focusVertexA, tMinL[i], triangle2Triangle_temp, TLA, tagsTATemp, triangleFan, referTmin, referNextT, referInput1, computeflag, compNum);
 				triangleFansList.push_back(triangleFan);
 				tagsTListA.push_back(tagsTATemp);
+				tagsV_B_Temp.push_back(tagsV_B_temp);
 				bool remainTriangles = false;
 				for (int i = 0; i < TLA.size(); i++) {
 					if (tagsTATemp[TLA[i]] == 0) {
@@ -250,11 +251,12 @@ bool CompareTFAN::buildTriangleFanB(const Model& inputA, bool unoriented, const 
 	}
 	return true;
 }
-bool CompareTFAN::computeTriangleFan(const Model& inputA, const std::vector<int>& trianglesA, int focusVertexA, int tMin, IntMultiVect& triangle2Triangle_temp, std::vector<int>& TLA, std::vector<int>& tagsT_A, VectIntVect& triangleFans, int& referTmin, int& referNextT, bool computeflag) {
+bool CompareTFAN::computeTriangleFan(const Model& inputA, const std::vector<int>& trianglesA, const std::vector<float>& verticesA, const std::vector<float>& referInput2, int focusVertexA, int tMin, IntMultiVect& triangle2Triangle_temp, std::vector<int>& TLA, std::vector<int>& tagsT_A, VectIntVect& triangleFans, int& referTmin, int& referNextT, const std::vector<int>& referInput1, bool computeflag, int& compNum) {
 	int connecMin = 0;
 	int nextT = 0;
 	int nextTOld = 0;
 	int vertexNT[3] = { -1, -1, -1 };
+	int vertexNT_cmp[3] = { -1, -1, -1 };
 	int vertexT[3] = { -1, -1, -1 };
 	if (tMin != -1) {
 		if (computeflag == true) {
@@ -298,7 +300,7 @@ bool CompareTFAN::computeTriangleFan(const Model& inputA, const std::vector<int>
 					}
 				}
 				//candidate > 1 means non-manifest structure
-				if (candidate > 2) {
+				if (candidate > 1) {
 					break;
 				}
 				//build tfan
@@ -311,6 +313,22 @@ bool CompareTFAN::computeTriangleFan(const Model& inputA, const std::vector<int>
 							}
 							nextT = triangle2Triangle_temp[nextTOld][h];
 							tagsT_A[nextT] = 1; tfan.push_back(nextT);
+							if (!computeflag) {
+								if (referNextT != -1) {
+									GetCoordIndex(referInput1, referNextT, vertexNT_cmp);
+									for (int j = 0; j < 3; j++) {
+										if (areVertexEqual(verticesA, referInput2, vertexNT[0 + j], vertexNT_cmp[0], compNum)
+											&& areVertexEqual(verticesA, referInput2, vertexNT[(1 + j) % 3], vertexNT_cmp[1], compNum)
+											&& areVertexEqual(verticesA, referInput2, vertexNT[(2 + j) % 3], vertexNT_cmp[2], compNum)) {
+											for (int k = 0; k < 3; k++) {
+												int vertexNT_temp[3] = { -1, -1, -1 };
+												GetCoordIndex(trianglesA, triangle2Triangle_temp[nextTOld][h], vertexNT_temp);
+												vertexNT[k] = vertexNT_temp[(k + j) % 3];
+											}
+										}
+									}
+								}
+							}  //handle repeat faces
 							for (int k = 0; k < 3; k++) {
 								if (vertexNT[k] == vfan[0]) {
 									a = vfan[1];
@@ -392,7 +410,7 @@ bool CompareTFAN::computeTriangleFan(const Model& inputA, const std::vector<int>
 	return true;
 }
 bool CompareTFAN::getTrianglesFansStatus(bool unoriented, const Model& inputA,
-	int focusVertexA, std::vector<int>& VLA, std::vector<int>& tagsV_A,
+	int focusVertexA, std::vector<int>& VLA, std::vector<int>& tagsV_A, std::vector<int>& tagsV_A_temp,
 	std::vector<int>& vertexMap_A, int& vertexCount_A, VectIntVect& triangleFans,
 	IntVect sortedConquestedVLA, IntVect& nbrFans_A, IntVect& degree_A, IntVect& cases_A,
 	IntVect& ops_A, IntVect& vertices_A)
@@ -411,14 +429,24 @@ bool CompareTFAN::getTrianglesFansStatus(bool unoriented, const Model& inputA,
 
 			for (int k = 0; k != triangleFans[f].size(); k++) {
 				v0A = triangleFans[f][k];
-				if (tagsV_A[v0A] == 0) {
-					ops.push_back(0);
-					vertexMap_A[v0A] = vertexCount_A++;
-					VLA.push_back(v0A);
-					sortedConquestedVLA.push_back(vertexMap_A[v0A]);
+				bool flag = true;
+				for (int i = 0; i < k; i++) {
+					if (v0A == triangleFans[f][i]) {
+						flag = false;
+					}
+				}
+				if (!flag) {
 					tagsV_A[v0A] = 1;
 				}
-				else {
+				if (tagsV_A[v0A] == 0) {
+					ops.push_back(0);
+				}
+				if (tagsV_A_temp[v0A] == 0) {
+					vertexMap_A[v0A] = vertexCount_A++;
+					sortedConquestedVLA.push_back(vertexMap_A[v0A]);
+					VLA.push_back(v0A);
+				}
+				if (tagsV_A[v0A] != 0) {
 					ops.push_back(1);
 					int pos = 0;
 					int found = 0;
@@ -435,6 +463,9 @@ bool CompareTFAN::getTrianglesFansStatus(bool unoriented, const Model& inputA,
 					else {
 						vertices.push_back(vertexMap_A[v0A] - vertexMap_A[focusVertexA]);
 					}
+				}
+				if (tagsV_A_temp[v0A] == 0) {
+					tagsV_A_temp[v0A] = 1;
 				}
 			}
 			//-----------------------------------------------
@@ -545,10 +576,10 @@ void CompareTFAN::compareTriangleFans(const Model& inputA, const Model& inputB, 
 		VLA.push_back(v);
 		TLA.clear();
 		processTriangle(inputA, unoriented, trianglesA, verticesA, v, tagsTA, vertexMapA, sortedConquestedVLA, TLA, triangle2TriangleA_temp, vfanxA, vertex2TriangleA, compNum);
-		buildTriangleFanA(inputA, unoriented, trianglesA, verticesA, v, tagsTA, triangleFansListA, TLA, triangle2TriangleA_temp, inputATMin, inputANextT, remainTrianglesA);
+		buildTriangleFanA(inputA, unoriented, trianglesA, verticesA, v, tagsTA, triangleFansListA, TLA, triangle2TriangleA_temp, inputATMin, inputANextT, remainTrianglesA, compNum);
 		if (triangleFansListA.size() != 0) {
 			getTrianglesFansStatus(unoriented, inputA, v, VLA,
-				tagsVA, vertexMapA, vertexCountA, triangleFansListA[iterationTimesA], sortedConquestedVLA, nbrFansA, degreeA, caseA, opsA, vertices_A);
+				tagsVA, tagsVA, vertexMapA, vertexCountA, triangleFansListA[iterationTimesA], sortedConquestedVLA, nbrFansA, degreeA, caseA, opsA, vertices_A);
 			nbrFansListA.push_back(nbrFansA);
 			degreeListA.push_back(degreeA);
 			caseListA.push_back(caseA);
@@ -578,6 +609,7 @@ void CompareTFAN::compareTriangleFans(const Model& inputA, const Model& inputB, 
 			std::vector<int> tagsT_B_temp(tagsTB);
 			IntVect vertexMap_B_temp(vertexMapB);
 			IntVect tagsV_B_temp(tagsVB);
+			VectIntVect tagsV_B_Temp;
 			int vertexCount_B_temp = vertexCountB;
 			tagsV_B_temp[vB] = 1; vertexMap_B_temp[vB] = vertexCount_B_temp++;
 
@@ -590,16 +622,16 @@ void CompareTFAN::compareTriangleFans(const Model& inputA, const Model& inputB, 
 			int pid = 0;
 			bool remainTrianglesB = true;
 			IntVect remainFlagList;
+			while (!stateStack.empty()) {
+				stateStack.pop();
+			}
 			//iteration times means the size of triangleFansList
 			while (iterationTimesB < iterationTimesA) {
 				found = false;
 				if (needBuildTFan) {
-					triangleFansListB.clear();
-					sortedConquestedVLB.clear();
-					remainFlagList.clear();
 					TLB.clear();
 					processTriangle(inputB, unoriented, trianglesB, verticesB, vB, tagsT_B_temp, vertexMap_B_temp, sortedConquestedVLB, TLB, triangle2TriangleB_temp, vfanxB, vertex2TriangleB, compNum);
-					buildTriangleFanB(inputB, unoriented, trianglesB, verticesB, vB, tagsT_B_temp, tagsTListB, triangleFansListB, TLB, triangle2TriangleB_temp, trianglesA, verticesA, inputATMinList[iterationTimesB], inputANextTList[iterationTimesB], v, remainFlagList, compNum);
+					buildTriangleFanB(inputB, unoriented, trianglesB, verticesB, vB, tagsT_B_temp, tagsV_B_temp, tagsV_B_Temp, tagsTListB, triangleFansListB, TLB, triangle2TriangleB_temp, trianglesA, verticesA, inputATMinList[iterationTimesB], inputANextTList[iterationTimesB], v, remainFlagList, compNum);
 					pid = 0;
 					si.iterationTimes = iterationTimesB;
 					si.tFansList = triangleFansListB;
@@ -621,7 +653,7 @@ void CompareTFAN::compareTriangleFans(const Model& inputA, const Model& inputB, 
 						VLB.push_back(vB);
 						remainTrianglesB = remainFlagList[p];
 						getTrianglesFansStatus(unoriented, inputB, vB, VLB,
-							tagsV_B_temp, vertexMap_B_temp, vertexCount_B_temp,
+							tagsV_B_Temp[p], tagsV_B_temp, vertexMap_B_temp, vertexCount_B_temp,
 							triangleFansListB[p], sortedConquestedVLB, nbrFansB, degreeB, caseB, opsB, vertices_B);
 						if (areIntVecEqual(caseB, caseListA[iterationTimesB]) && areIntVecEqual(degreeB, degreeListA[iterationTimesB])
 							&& areVLEqual(verticesA, verticesB, VLAList[iterationTimesB], VLB, compNum)
