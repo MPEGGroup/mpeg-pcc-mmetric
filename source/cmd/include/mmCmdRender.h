@@ -30,7 +30,7 @@ class CmdRender : Command {
  private:
   // the command options
   std::string inputModelFilename;
-  std::string inputTextureFilename;
+  std::vector<std::string> inputTextureFilenames;
   std::string outputImageFilename = "output.png";
   std::string outputDepthFilename = "";
   std::string renderer            = "sw_raster";

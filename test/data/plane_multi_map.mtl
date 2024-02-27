@@ -1,0 +1,11 @@
+newmtl material0000
+Ka 1 1 1
+Kd 1 1 1
+Ks 0 0 0
+map_Kd plane.png
+
+newmtl material0001
+Ka 1 1 1
+Kd 1 1 1
+Ks 0 0 0
+map_Kd basketball_player_00000001.png

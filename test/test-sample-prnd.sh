@@ -56,10 +56,10 @@ $CMD sample -i ${DATA}/sphere.obj -o ${TMP}/${OUT}.ply --mode prnd --hideProgres
 grep -iF "error" ${TMP}/${OUT}.txt
 # no ref (takes some space in the git)
 
-# test degenerate triangle
+# test degenerate triangle (force texture map to "" to disable)
 OUT=sample_prnd_degenerate_50
 echo $OUT
-$CMD sample -i ${DATA}/degenerate.obj -o ${TMP}/${OUT}.ply --mode prnd --hideProgress --nbSamples=50 \
+$CMD sample -i ${DATA}/degenerate.obj -m "" -o ${TMP}/${OUT}.ply --mode prnd --hideProgress --nbSamples=50 \
 	--outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 grep -iF "error" ${TMP}/${OUT}.txt
 fileHasString ${TMP}/${OUT}.txt "Skipped 1 degenerate triangles" 1

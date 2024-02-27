@@ -48,8 +48,8 @@ using namespace mm;
 //
 Context* IO::_context = NULL;
 // create the stores
-std::map<std::string, Model*> IO::_models;
-std::map<std::string, Image*> IO::_images;
+std::map<std::string, ModelPtr> IO::_models;
+std::map<std::string, ImagePtr> IO::_images;
 
 //
 void IO::setContext( Context* context ) { _context = context; }
@@ -69,35 +69,36 @@ std::string IO::resolveName( const uint32_t frame, const std::string& input ) {
 }
 
 //
-Model* IO::loadModel( std::string templateName ) {
-  std::string                             name = resolveName( _context->getFrame(), templateName );
-  std::map<std::string, Model*>::iterator it   = IO::_models.find( name );
-  if ( it == IO::_models.end() ) {
-    if ( name.substr( 0, 3 ) == "ID:" ) {
-      std::cout << "Error: model with id " << name << "not defined" << std::endl;
-      return NULL;
-    } else {  // we try to load the model
-      Model* model = new Model();
-      if ( !IO::_loadModel( name, *model ) ) {
-        delete model;
-        return NULL;
-      } else {
-        IO::_models[name] = model;
-        return model;
-      }
+ModelPtr IO::loadModel(std::string templateName)
+{
+    std::string name = resolveName(_context->getFrame(), templateName);
+    std::map<std::string, ModelPtr>::iterator it = IO::_models.find(name);
+    if (it == IO::_models.end()) {
+        if (name.substr(0, 3) == "ID:") {
+            std::cout << "Error: model with id " << name << "not defined" << std::endl;
+            return ModelPtr();
+        }
+        else {  
+            // we try to load the model
+            ModelPtr model = ModelPtr(new Model());
+            if (IO::_loadModel(name, *model)) {
+                IO::_models[name] = model;
+                return model;
+            }
+            else
+                return ModelPtr();
+        }
     }
-  }
-  return it->second;
+    return it->second;
 };
 
 //
-bool IO::saveModel( std::string templateName, Model* model ) {
-  std::string                             name = resolveName( _context->getFrame(), templateName );
-  std::map<std::string, Model*>::iterator it   = IO::_models.find( name );
+bool IO::saveModel( std::string templateName, ModelPtr model ) {
+  std::string name = resolveName( _context->getFrame(), templateName );
+  std::map<std::string, ModelPtr>::iterator it = IO::_models.find( name );
   if ( it != IO::_models.end() ) {
     std::cout << "Warning: model with id " << name << " already defined, overwriting" << std::endl;
-    delete it->second;
-    it->second = model;
+    it->second = model; // previous model will be freed by the shared pointer
   } else {
     IO::_models[name] = model;
   }
@@ -107,53 +108,60 @@ bool IO::saveModel( std::string templateName, Model* model ) {
 }
 
 //
-Image* IO::loadImage( std::string templateName ) {
+ImagePtr IO::loadImage( std::string templateName ) {
   // The IO store is purged for each new frame.
   // So in case of video file without %d template we just use the filename (unchanged by resolveName).
-  std::string                             name = resolveName( _context->getFrame(), templateName );
-  std::map<std::string, Image*>::iterator it   = IO::_images.find( name );
+  std::string name = resolveName( _context->getFrame(), templateName );
+  std::map<std::string, ImagePtr>::iterator it = IO::_images.find( name );
 
   // use image/frame from store
   if ( it != IO::_images.end() ) { return it->second; }
-
+  
   // not found in store but name is an ID => error
+  // empty image will be added to the stiore with given ID
   if ( name.substr( 0, 3 ) == "ID:" ) {
-    std::cout << "Error: image with id " << name << "not defined" << std::endl;
-    return NULL;
+    std::cout << "Error: image with id " << name << " not defined" << std::endl;
+    return ImagePtr();
   }
 
   // else try to load the image/frame
-  Image* image = new Image();
+  ImagePtr image = ImagePtr(new Image());
 
-  std::string ext = templateName.substr( templateName.find_last_of( "." ) );
+  auto dotPos = templateName.find_last_of(".");
+  if (dotPos == std::string::npos) {
+      std::cout << "Error: missing map filename extension " << templateName << std::endl;
+      return ImagePtr();
+  }
+
+  std::string ext = templateName.substr(dotPos);
   std::transform( ext.begin(), ext.end(), ext.begin(), []( unsigned char c ) { return std::tolower( c ); } );
 
   if ( ext == ".yuv" || ext == ".rgb" ) {
     // try to load as video
     if ( !IO::_loadImageFromVideo( name, *image ) ) {
-      delete image;
-      return NULL;
+        return ImagePtr();
     }
   } else {
     // try to load as image
     if ( !IO::_loadImage( name, *image ) ) {
-      delete image;
-      return NULL;
+        return ImagePtr();
     }
   }
+
   // add to the store
   IO::_images[name] = image;
   return image;
 };
 
-bool IO::loadImages( const std::vector<std::string>& imageUrlList, std::vector<mm::Image*>& images ) {
+bool IO::loadImages( const std::vector<std::string>& imageUrlList, std::vector<mm::ImagePtr>& images ) {
   bool res = true;
   for ( auto url : imageUrlList ) {
     if ( url.size() != 0 ) {
       images.push_back( mm::IO::loadImage( url ) );  // thus if fails, the element of the array contains NULL
-      res = res && ( images.back() != NULL );
+      res = res && isValid( images.back() );
     } else {
-      images.push_back( NULL ); // not an error
+      // not an error, see method documentation
+      images.push_back( ImagePtr() );
     }
   }
   return res;
@@ -179,13 +187,9 @@ bool  IO::saveImage(std::string name, Image* image) {
 //
 void IO::purge( void ) {
   // free all the texture maps
-  std::map<std::string, Image*>::iterator imageIt = IO::_images.begin();
-  for ( ; imageIt != _images.end(); ++imageIt ) { delete imageIt->second; }
   _images.clear();
 
   // free all the models
-  std::map<std::string, Model*>::iterator modelIt = IO::_models.begin();
-  for ( ; modelIt != _models.end(); ++modelIt ) { delete modelIt->second; }
   _models.clear();
 }
 
@@ -223,11 +227,19 @@ bool IO::_loadModel( std::string filename, Model& output ) {
       std::cout << "Time on loading: " << ( (float)( t2 - t1 ) ) / CLOCKS_PER_SEC << " sec." << std::endl;
     }
   } else {
-    std::cout << "Error, invalid mesh file extension (not in obj, ply)" << std::endl;
+    std::cout << "Error, invalid model filename extension (not in obj, ply)" << std::endl;
     return false;
   }
 
   if ( success ) {
+    // generate default material IDs if needed
+    // some parsers doe not support multi materials
+    if (output.triangleMatIdx.empty()) {
+        output.triangleMatIdx.assign(output.triangles.size() / 3, 0);
+    }
+    if (output.materialNames.empty()) {
+        output.materialNames.push_back("material0000");
+    }
     // print stats
     std::cout << "Input model: " << filename << std::endl;
     std::cout << "  Vertices: " << output.vertices.size() / 3 << std::endl;
@@ -495,19 +507,19 @@ bool IO::_loadObj(std::string filename, Model& output) {
                         std::cerr << "Error: line " << bs.lc << " expected floating point value" << std::endl;
                     }
                     // may push zero to be "robust"
-                    output.vertices.push_back(value);
+                    output.vertices.push_back((float)value);
                 }
                 // parse the color if any (re map 0.0-1.0 to 0-255 internal color format)
                 double value = 0;
                 if (bs.getDouble(value)) {
-                    output.colors.push_back(std::roundf(value * 255));
+                    output.colors.push_back(std::roundf((float)value * 255));
                     for (int i = 0; i < 2; i++) {
                         value = 0;
                         if (!bs.getDouble(value)) {
                             std::cerr << "Error: line " << bs.lc << " expected floating point value" << std::endl;
                         }
                         // may push zero to be "robust"
-                        output.colors.push_back( std::roundf( value * 255 ) );
+                        output.colors.push_back( std::roundf( (float)value * 255 ) );
                     }
                 }
             }
@@ -519,7 +531,7 @@ bool IO::_loadObj(std::string filename, Model& output) {
                         std::cerr << "Error: line " << bs.lc << " expected floating point value" << std::endl;
                     }
                     // may push zero to be "robust"
-                    output.normals.push_back(value);
+                    output.normals.push_back((float)value);
                 }
             }
             else if (c2 == 't') {
@@ -530,7 +542,7 @@ bool IO::_loadObj(std::string filename, Model& output) {
                         std::cerr << "Error: line " << bs.lc << " expected floating point value" << std::endl;
                     }
                     // may push zero to be "robust"
-                    output.uvcoords.push_back(value);
+                    output.uvcoords.push_back((double)value);
                 }
             }
         }

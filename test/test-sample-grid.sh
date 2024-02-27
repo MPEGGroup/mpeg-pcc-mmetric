@@ -55,10 +55,10 @@ $CMD sample -i ${DATA}/sphere.obj -m ${DATA}/plane.png -o ${TMP}/${OUT}.ply --mo
 grep -iF "error" ${TMP}/${OUT}.txt
 cmp ${TMP}/${OUT}.ply ${REFS}/${OUT}.ply
 
-# test degenerate triangle
+# test degenerate triangle (force texture map to "" to disable)
 OUT=sample_grid_degenerate
 echo $OUT
-$CMD sample -i ${DATA}/degenerate.obj -o ${TMP}/${OUT}.ply --mode grid --hideProgress --gridSize 10 --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
+$CMD sample -i ${DATA}/degenerate.obj -m "" -o ${TMP}/${OUT}.ply --mode grid --hideProgress --gridSize 10 --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 grep -iF "error" ${TMP}/${OUT}.txt
 fileHasString ${TMP}/${OUT}.txt "Skipped 1 degenerate triangles" 1
 

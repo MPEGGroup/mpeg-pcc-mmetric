@@ -67,7 +67,13 @@ if [ ! -d ${TMPDATA} ]; then
 			quantize --qp 0 --qt $q --qc 0 --qn 0 --dequantize --inputModel ${DATA}/basketball_player_0000000%1d.obj \
 				--outputModel ${TMPDATA}/basketball_player_0000000%1d_qt${q}.obj \
 			>> ${TMPDATA}/log.txt 2>&1
+
 	done
+	
+	# copy material files, prevents load errors on OBJ parsing
+	# but the maps can be overloaded or disabled through command line
+	cp ${DATA}/plane.mtl ${TMPDATA}
+	cp ${DATA}/basketball_player_0000000*.mtl ${TMPDATA}
 	
 	grep -iF "error" ${TMPDATA}/log.txt
 fi

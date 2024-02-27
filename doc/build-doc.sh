@@ -47,6 +47,8 @@ done
 
 cat ${MAINDIR}/LICENSE.md >> ${MAINDIR}/README.md
 
+cat ${MAINDIR}/doc/FOOTER.md >> ${MAINDIR}/README.md
+
 # homogeneize line endings
 dos2unix README.md
 #EOF

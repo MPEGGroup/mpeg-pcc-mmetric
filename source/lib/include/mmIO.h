@@ -41,35 +41,22 @@ class IO {
   static std::string resolveName( const uint32_t frame, const std::string& input );
 
   // name can be filename or "ID:xxxx"
-  // return NULL in case of error
-  static Model* loadModel( std::string templateName );
+  // return invalid shared pointer in case of error (to check with isValid(model)).
+  static ModelPtr loadModel( std::string templateName );
 
-  static bool saveModel( std::string templateName, Model* model );
+  static bool saveModel( std::string templateName, ModelPtr model );
 
   // load image files and images from videos
   // name can be filename or "ID:xxxx"
-  // return NULL in case of error
-  static Image* loadImage( std::string templateName );
+  // return invalid shared pointer in case of error (to check with isValid(image)).
+  static ImagePtr loadImage( std::string templateName );
 
   // load list of images from files and images from videos
   // empty string urls are skipped silently and null is stored, but it is not considered an error (see materials without map)
   // names in imageUrlList can be filename or "ID:xxxx"
-  // fills the images vector with images, some may be NULL in case of error
+  // fills the images vector with images, some may be invalid shared pointer in case of error 
   // returns false if at least one image load failed
-  static bool loadImages( const std::vector< std::string >& imageUrlList, std::vector<mm::Image*>& images );
-
-  // returns the image of index mapIdx
-  // It may fallback to first image the index does not exist
-  // It may return null if the image of index Idx is null or if images is empty.
-  // Result must be checked before use
-  inline Image* selectImage( std::vector<mm::Image*>& images, int mapIdx ) {
-    if ( mapIdx < images.size() ) 
-        return images[mapIdx];
-    if ( images.size() != 0 )
-        return images[0];
-    return 0;  
-  }
-
+  static bool loadImages( const std::vector< std::string >& imageUrlList, std::vector<mm::ImagePtr>& images );
 
   /*
   static bool saveImage(std::string name, Image* image);*/
@@ -82,9 +69,9 @@ class IO {
   static Context* _context;
 
   // model store
-  static std::map<std::string, Model*> _models;
+  static std::map<std::string, ModelPtr> _models;
   // image store
-  static std::map<std::string, Image*> _images;
+  static std::map<std::string, ImagePtr> _images;
 
  public:
   // Automatic choice on extension

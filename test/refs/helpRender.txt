@@ -3,7 +3,9 @@ Usage:
   mm.exe render [OPTION...]
 
   -i, --inputModel arg     path to input model (obj or ply file)
-  -m, --inputMap arg       path to input texture map (png, jpeg)
+  -m, --inputMap arg       path to input texture map (png, jpg, rgb, yuv),
+                           can be multiple paths surrounded by double quotes and
+                           separated by spaces.
   -o, --outputImage arg    path to output image (png file) (default:
                            output.png)
       --outputDepth arg    path to output depth RGBA png file with 32bit

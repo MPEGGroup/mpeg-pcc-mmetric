@@ -1,5 +1,6 @@
 model;texture;frame;mode;areaThreshold;bilinear;nbSamplesMin;nbSamplesMax;maxIterations;computedThreshold;nbSamples
 ./data/plane.obj;./data/plane.png;0;sdiv;1;1;0;0;10;0;145
+./data/plane.obj;./data/plane.png;0;sdiv;1;1;0;0;10;0;145
 ./data/plane.obj;./data/plane.png;0;sdiv;1;0;0;0;10;0;145
 ./data/plane.obj;./data/plane_10_10.png;0;sdiv;1;0;0;0;10;0;292
 ./data/plane_irregular.obj;./data/plane_10_10.png;0;sdiv;1;0;0;0;10;0;255

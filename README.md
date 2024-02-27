@@ -11,10 +11,14 @@
 
 # Compilation
 
-Download and build dependencies with following command:
-- ./build.sh 
+The build of the software as well the download and build of its dependencies 
+is performed with following command:
 
-Build software with following command:
+```
+./build.sh 
+```
+
+The following options are available:
 
 - `-h|--help  `: Display this information.
 - `-o|--ouptut`: Output build directory.
@@ -26,7 +30,7 @@ Build software with following command:
 - `--format   `: Format source code
 - `--nojobs   `: Disables multi-processor build on unix
 - `--noomp    `: Disables openmp build
-- `--nocmd    `: Disables mm software building
+- `--nocmd    `: Disables build of mm command
 
 Software can also be built manually:
 
@@ -42,7 +46,7 @@ cmake --build ./build_test/ --config Release --parallel 20
 Note: 
 - the system can read/write point clouds as obj or ply format.
 - the system can read/write meshes as obj or ply format.
-- once a file loaded the system detects a mesh by checking if any topology is avilable.
+- once a file loaded the system detects a mesh by checking if any topology is available.
 
 ## Simple commands
 
@@ -68,6 +72,42 @@ mm.exe \
     --inputMapA   mapA.png \
     --inputModelB inputB.obj \
     --inputMapB   mapB.png
+```
+
+If the models are obj files with associated material files pointing to proper texture files the inputMap parameters 
+can be omitted. The obj file can use multiple textures defined in the mtl file. The hardware renderer and any 
+hardware accelerated command using the HW renderer (such as IBSM compare) do not support multi-texturing.
+
+```
+mm.exe \
+  compare \
+    --mode        pcc \
+    --inputModelA inputA.obj \
+    --inputModelB inputB.obj \
+```
+
+Overriding the multi-textures can be performed through the command line. For instance if the model A uses originally two textures 
+defined in the mtl file, one can replace those as follows:
+
+```
+mm.exe \
+  compare \
+    --mode        pcc \
+    --inputModelA inputA.obj \
+    --inputMapA   "anotherFirstMapA.png anotherSecondMapA.png" \
+    --inputModelB inputB.obj \
+```
+
+Deactivating the use of textures can be dones by providing an empty string as parameter. The following example will systematically 
+decativate texture mapping for modelA whereas modelB will use the mtl file if any or do not use any texture map otherwise.
+
+```
+mm.exe \
+  compare \
+    --mode        pcc \
+    --inputModelA inputA.obj \
+    --inputMapA   "" \
+    --inputModelB inputB.obj \
 ```
 
 ## Commands combination
@@ -132,7 +172,7 @@ Note however that memory won't be released between sub command calls so cascadin
 ## Sequence processing
 
 Following sample demonstrates how to execute commands on a numerated sequence of objects ranging from 00150 to 00165 included. 
-The "%3d" part of the file names will be replaced by the frame number ranging from firstFrame to lastFrame, coded on 3 digits.
+The "%04d" part of the file names will be replaced by the frame number ranging from firstFrame to lastFrame, coded on 4 digits.
 
 ```
 mm.exe \
@@ -268,7 +308,9 @@ Usage:
   mm.exe analyse [OPTION...]
 
       --inputModel arg  path to input model (obj or ply file)
-      --inputMap arg    path to input texture map (png, jpeg)
+      --inputMap arg    path to input texture map (png, jpeg), can be
+                        multiple paths surrounded by double quotes and separated by
+                        spaces.
       --outputCsv arg   optional path to output results file
       --outputVar arg   optional path to output variables file
   -h, --help            Print usage
@@ -286,9 +328,11 @@ Usage:
       --inputModelA arg   path to reference input model (obj or ply file)
       --inputModelB arg   path to distorted input model (obj or ply file)
       --inputMapA arg     path to reference input texture map (png, jpg, rgb,
-                          yuv)
+                          yuv), can be multiple paths surrounded by double
+                          quotes and separated by spaces.
       --inputMapB arg     path to distorted input texture map (png, jpg, rgb,
-                          yuv)
+                          yuv), can be multiple paths surrounded by double
+                          quotes and separated by spaces.
       --outputModelA arg  path to output model A (obj or ply file)
       --outputModelB arg  path to output model B (obj or ply file)
       --outputCsv arg     filename of the file where per frame statistics
@@ -528,7 +572,9 @@ Usage:
   mm.exe render [OPTION...]
 
   -i, --inputModel arg     path to input model (obj or ply file)
-  -m, --inputMap arg       path to input texture map (png, jpeg)
+  -m, --inputMap arg       path to input texture map (png, jpg, rgb, yuv),
+                           can be multiple paths surrounded by double quotes and
+                           separated by spaces.
   -o, --outputImage arg    path to output image (png file) (default:
                            output.png)
       --outputDepth arg    path to output depth RGBA png file with 32bit
@@ -577,7 +623,9 @@ Usage:
   mm.exe sample [OPTION...]
 
   -i, --inputModel arg   path to input model (obj or ply file)
-  -m, --inputMap arg     path to input texture map (png, jpg, rgb, yuv)
+  -m, --inputMap arg     path to input texture map (png, jpg, rgb, yuv), can
+                         be multiple paths surrounded by double quotes and
+                         separated by spaces.
   -o, --outputModel arg  path to output model (obj or ply file)
       --mode arg         the sampling mode in [face,grid,map,sdiv,ediv,prnd]
       --hideProgress     hide progress display in console for use by robot
@@ -632,6 +680,8 @@ Usage:
                        in the output point cloud (default: 2000000)
 
  sdiv mode options:
+      --maxDepth arg       maximum recursion depth, maxDepth=1 means keep
+                           only original vertices (default: 100)
       --areaThreshold arg  face area limit to stop subdivision (default: 1.0)
       --mapThreshold       if set will refine until face vertices texels are
                            distanced of 1 and areaThreshold reached
@@ -689,3 +739,25 @@ Author: jean-eudes.marvie@interdigital.com
 |mpec_pcc_dmetric | MIT     | http://mpegx.int-evry.fr/software/MPEG/PCC/mpeg-pcc-dmetric   |
 |glad             | MIT     | https://github.com/Dav1dde/glad                               |
 |glfw             | ZLIB    | https://github.com/glfw/glfw                                  |
+# References
+
+```
+@article{article,
+	author = {Marvie, Jean-Eudes and Nehme, Yana and Graziosi, Danillo and Lavoué, Guillaume},
+	year = {2023},
+	month = {06},
+	pages = {},
+	title = {Crafting the MPEG metrics for objective and perceptual quality assessment of volumetric videos},
+	volume = {8},
+	journal = {Quality and User Experience},
+	doi = {10.1007/s41233-023-00057-4}
+}
+```
+
+# Contacts
+
+Jean-Eudes Marvie (jean-eudes.marvie (at) interdigital.com)
+
+# Feedback
+
+For documented and repeatable bugs, feature requests, etc., please use the [Gitlab](https://git.mpeg.expert/MPEG/3dgh/v-pcc/software/mpeg-pcc-mmetric/-/issues) issues.

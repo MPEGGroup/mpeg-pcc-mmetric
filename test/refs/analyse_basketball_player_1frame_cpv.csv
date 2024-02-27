@@ -1,0 +1,2 @@
+frame;triangles;vertices;uvcoords;colors;normals;materials;minPosX;minPosY;minPosZ;maxPosX;maxPosY;maxPosZ;minU;minV;maxU;maxV;minColR;minColG;minColB;maxColR;maxColB;maxColB;minNrmY;minNrmY;minNrmZ;maxNrmY;maxNrmY;maxNrmZ
+0;39455;20692;0;20692;0;0;-327.497009;-480.270996;-447.700989;331.272003;1394.81995;197.507004;;;;;2;2;0;255;251;255;;;;;;

@@ -89,16 +89,18 @@ bool CmdReindex::initialize( Context* ctx, std::string app, int argc, char* argv
 
 bool CmdReindex::process( uint32_t frame ) {
   // the input
-  mm::Model* inputModel;
-  if ( ( inputModel = mm::IO::loadModel( _inputModelFilename ) ) == NULL ) { return false; }
+  mm::ModelPtr inputModel = mm::IO::loadModel(_inputModelFilename);
+  if (!inputModel) return false;
   if ( inputModel->vertices.size() == 0 ) {
     std::cout << "Error: invalid input model from " << _inputModelFilename << std::endl;
     return false;
   }
 
   // the output
-  mm::Model* outputModel = new mm::Model();
-  outputModel->header    = inputModel->header;  // preserve material
+  mm::ModelPtr outputModel = mm::ModelPtr( new mm::Model() );
+  outputModel->header    = inputModel->header;               // preserve material
+  outputModel->materialNames = inputModel->materialNames;    // preserve material
+  outputModel->textureMapUrls = inputModel->textureMapUrls;  // preserve material
   outputModel->comments  = inputModel->comments;
 
   // Perform the processings
@@ -118,11 +120,6 @@ bool CmdReindex::process( uint32_t frame ) {
   std::cout << "Time on processing: " << ( (float)( t2 - t1 ) ) / CLOCKS_PER_SEC << " sec." << std::endl;
 
   // save the result
-  if ( mm::IO::saveModel( _outputModelFilename, outputModel ) ) return true;
-  else {
-    delete outputModel;
-    return false;
-  }
+  return mm::IO::saveModel( _outputModelFilename, outputModel );
 
-  return true;
 }

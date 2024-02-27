@@ -84,44 +84,60 @@ Compare::~Compare() {
   if ( _hwRendererInitialized ) { _hwRenderer.shutdown(); }
 }
 
-int Compare::equ( const mm::Model& inputA,
-                  const mm::Model& inputB,
-                  const mm::Image& mapA,
-                  const mm::Image& mapB,
-                  float            epsilon,
-                  bool             earlyReturn,
-                  bool             unoriented,
-                  mm::Model&       outputA,
-                  mm::Model&       outputB ) {
+int Compare::equ(
+    const mm::Model& inputA,
+    const mm::Model& inputB,
+    const std::vector<mm::ImagePtr>& mapSetA,
+    const std::vector<mm::ImagePtr>& mapSetB,
+    float epsilon,
+    bool earlyReturn,
+    bool unoriented,
+    mm::Model& outputA,
+    mm::Model& outputB)
+{
   // we test the maps
-  if ( mapA.data != NULL || mapB.data != NULL ) {
-    if ( mapA.data == NULL ) {
-      std::cout << "texture maps are not equal: mapA is null" << std::endl;
-    } else if ( mapB.data == NULL ) {
-      std::cout << "texture maps are not equal: mapB is null" << std::endl;
-    } else {
-      if ( mapA.width != mapB.width || mapA.height != mapB.height ) {
-        std::cout << "texture maps are not equal: dimensions are not equal" << std::endl;
-      } else {
-        size_t diffs = 0;
-        for ( size_t row = 0; row < mapA.height; ++row ) {
-          for ( size_t col = 0; col < mapA.width; ++col ) {
-            glm::vec3 colA, colB;
-            mapA.fetchRGB( col, row, colA );
-            mapB.fetchRGB( col, row, colB );
-            if ( colA != colB ) ++diffs;
-          }
-        }
-        if ( diffs != 0 ) {
-          std::cout << "texture maps are not equal: " << diffs << "pixel differences" << std::endl;
-        } else {
-          std::cout << "texture maps are equal" << std::endl;
-        }
-      }
+    if (mapSetA.size() != mapSetB.size()) {
+        std::cout << "texture map sets are not of equal size" << std::endl;
     }
-  } else {
-    std::cout << "skipping texture maps comparison" << std::endl;
-  }
+    else if ( mapSetA.size() == 0 ){
+        std::cout << "skipping texture maps comparison" << std::endl;
+    }
+    else {
+        for (auto mapIdx = 0; mapIdx < mapSetA.size(); mapIdx++) {
+            const auto& mapA = *(mapSetA[mapIdx]);
+            const auto& mapB = *(mapSetB[mapIdx]);
+            if (mapA.data != NULL || mapB.data != NULL) {
+                if (mapA.data == NULL) {
+                    std::cout << "texture maps are not equal: mapA is null" << std::endl;
+                }
+                else if (mapB.data == NULL) {
+                    std::cout << "texture maps are not equal: mapB is null" << std::endl;
+                }
+                else {
+                    if (mapA.width != mapB.width || mapA.height != mapB.height) {
+                        std::cout << "texture maps are not equal: dimensions are not equal" << std::endl;
+                    }
+                    else {
+                        size_t diffs = 0;
+                        for (size_t row = 0; row < mapA.height; ++row) {
+                            for (size_t col = 0; col < mapA.width; ++col) {
+                                glm::vec3 colA, colB;
+                                mapA.fetchRGB(col, row, colA);
+                                mapB.fetchRGB(col, row, colB);
+                                if (colA != colB) ++diffs;
+                            }
+                        }
+                        if (diffs != 0) {
+                            std::cout << "texture maps are not equal: " << diffs << "pixel differences" << std::endl;
+                        }
+                        else {
+                            std::cout << "texture maps are equal" << std::endl;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
   if ( inputA.triangles.size() != inputB.triangles.size() ) {
     std::cout << "meshes are not equal, number of triangles are different " << inputA.triangles.size() / 3 << " vs "
@@ -269,46 +285,55 @@ int Compare::equ( const mm::Model& inputA,
 
 int Compare::eqTFAN(mm::Model& inputA,
     mm::Model& inputB,
-    const mm::Image& mapA,
-    const mm::Image& mapB,
+    const std::vector<mm::ImagePtr>& mapSetA,
+    const std::vector<mm::ImagePtr>& mapSetB,
     float            epsilon,
     bool             earlyReturn,
     bool             unoriented,
     mm::Model& outputA,
     mm::Model& outputB) {
     // we test the maps
-    if (mapA.data != NULL || mapB.data != NULL) {
-        if (mapA.data == NULL) {
-            std::cout << "texture maps are not equal: mapA is null" << std::endl;
-        }
-        else if (mapB.data == NULL) {
-            std::cout << "texture maps are not equal: mapB is null" << std::endl;
-        }
-        else {
-            if (mapA.width != mapB.width || mapA.height != mapB.height) {
-                std::cout << "texture maps are not equal: dimensions are not equal" << std::endl;
-            }
-            else {
-                size_t diffs = 0;
-                for (size_t row = 0; row < mapA.height; ++row) {
-                    for (size_t col = 0; col < mapA.width; ++col) {
-                        glm::vec3 colA, colB;
-                        mapA.fetchRGB(col, row, colA);
-                        mapB.fetchRGB(col, row, colB);
-                        if (colA != colB) ++diffs;
-                    }
-                }
-                if (diffs != 0) {
-                    std::cout << "texture maps are not equal: " << diffs << "pixel differences" << std::endl;
-                }
-                else {
-                    std::cout << "texture maps are equal" << std::endl;
-                }
-            }
-        }
+    if (mapSetA.size() != mapSetB.size()) {
+        std::cout << "texture map sets are not of equal size" << std::endl;
+    }
+    else if (mapSetA.size() == 0) {
+        std::cout << "skipping texture maps comparison" << std::endl;
     }
     else {
-        std::cout << "skipping texture maps comparison" << std::endl;
+        for (auto mapIdx = 0; mapIdx < mapSetA.size(); mapIdx++) {
+            const auto& mapA = *(mapSetA[mapIdx]);
+            const auto& mapB = *(mapSetB[mapIdx]);
+            if (mapA.data != NULL || mapB.data != NULL) {
+                if (mapA.data == NULL) {
+                    std::cout << "texture maps are not equal: mapA is null" << std::endl;
+                }
+                else if (mapB.data == NULL) {
+                    std::cout << "texture maps are not equal: mapB is null" << std::endl;
+                }
+                else {
+                    if (mapA.width != mapB.width || mapA.height != mapB.height) {
+                        std::cout << "texture maps are not equal: dimensions are not equal" << std::endl;
+                    }
+                    else {
+                        size_t diffs = 0;
+                        for (size_t row = 0; row < mapA.height; ++row) {
+                            for (size_t col = 0; col < mapA.width; ++col) {
+                                glm::vec3 colA, colB;
+                                mapA.fetchRGB(col, row, colA);
+                                mapB.fetchRGB(col, row, colB);
+                                if (colA != colB) ++diffs;
+                            }
+                        }
+                        if (diffs != 0) {
+                            std::cout << "texture maps are not equal: " << diffs << "pixel differences" << std::endl;
+                        }
+                        else {
+                            std::cout << "texture maps are equal" << std::endl;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if (inputA.triangles.size() != inputB.triangles.size()) {
@@ -454,10 +479,13 @@ int Compare::eqTFAN(mm::Model& inputA,
         }
     }
 }
-int Compare::topo( const mm::Model&   modelA,
-                   const mm::Model&   modelB,
-                   const std::string& faceMapFilename,
-                   const std::string& vertexMapFilename ) {
+
+int Compare::topo(
+    const mm::Model& modelA,
+    const mm::Model& modelB,
+    const std::string& faceMapFilename,
+    const std::string& vertexMapFilename)
+{
   // 1 - Test if number of triangles of output matches input number of triangles
   if ( modelA.getTriangleCount() != modelB.getTriangleCount() ) {
     std::cout << "Topologies are different: number of triangles differs (A=" << modelA.getTriangleCount()
@@ -607,7 +635,11 @@ int Compare::topo( const mm::Model&   modelA,
   return true;
 }
 
-void sampleIfNeeded( const mm::Model& input, const mm::Image& map, mm::Model& output ) {
+void sampleIfNeeded( 
+    const mm::Model& input, 
+    const std::vector<mm::ImagePtr>& mapSet,
+    mm::Model& output ) 
+{
   if ( input.triangles.size() != 0 ) {
     // first reorder the model to prevent small variations
     // when having two similar topologies but not same orders of enumeration
@@ -616,7 +648,7 @@ void sampleIfNeeded( const mm::Model& input, const mm::Image& map, mm::Model& ou
 
     // then use face subdivision without map citerion and area 
     // threshold of 2.0, and maximum recursion depth of 3
-    mm::Sample::meshToPcDiv( reordered, output, map, 3, 2.0, false, true, false );
+    mm::Sample::meshToPcDiv( reordered, output, mapSet, 3, 2.0, false, true, false );
 
   } else {
     output = input;  //  pass through
@@ -624,7 +656,12 @@ void sampleIfNeeded( const mm::Model& input, const mm::Image& map, mm::Model& ou
 }
 
 // code  from PCC_error (prevents pcc_error library modification.
-int removeDuplicatePoints( PccPointCloud& pc, int dropDuplicates, int neighborsProc, const bool verbose = true ) {
+int removeDuplicatePoints( 
+    PccPointCloud& pc, 
+    int dropDuplicates, 
+    int neighborsProc, 
+    const bool verbose = true ) 
+{
   // sort the point cloud
   std::vector<size_t> indices;
   indices.resize( pc.size );
@@ -740,10 +777,12 @@ int removeDuplicatePoints( PccPointCloud& pc, int dropDuplicates, int neighborsP
 // utility func used by compare::pcc
 // no sanity check, we assume the model is clean
 // and generated by sampling that allways generate content with color and normals
-void convertModel( const mm::Model&         inputModel,
-                   pcc_quality::commandPar& params,
-                   PccPointCloud&           outputModel,
-                   const bool               verbose ) {
+void convertModel( 
+    const mm::Model&         inputModel,
+    pcc_quality::commandPar& params,
+    PccPointCloud&           outputModel,
+    const bool               verbose ) 
+{
   for ( size_t i = 0; i < inputModel.vertices.size() / 3; ++i ) {
     // push the positions
     outputModel.xyz.p.push_back( std::array<float, 3>(
@@ -772,17 +811,19 @@ void convertModel( const mm::Model&         inputModel,
   removeDuplicatePoints( outputModel, params.dropDuplicates, params.neighborsProc, verbose );
 }
 
-int Compare::pcc( const mm::Model&         modelA,
-                  const mm::Model&         modelB,
-                  const mm::Image&         mapA,
-                  const mm::Image&         mapB,
-                  pcc_quality::commandPar& params,
-                  mm::Model&               outputA,
-                  mm::Model&               outputB,
-                  const bool               verbose ) {
+int Compare::pcc(
+    const mm::Model& modelA,
+    const mm::Model& modelB,
+    const std::vector<mm::ImagePtr>& mapSetA,
+    const std::vector<mm::ImagePtr>& mapSetB,
+    pcc_quality::commandPar& params,
+    mm::Model& outputA,
+    mm::Model& outputB,
+    const bool verbose)
+{
   // 1 - sample the models if needed
-  sampleIfNeeded( modelA, mapA, outputA );
-  sampleIfNeeded( modelB, mapB, outputB );
+  sampleIfNeeded( modelA, mapSetA, outputA );
+  sampleIfNeeded( modelB, mapSetB, outputB );
 
   // 2 - transcode to PCC internal format
   pcc_processing::PccPointCloud inCloud1;
@@ -892,26 +933,28 @@ void convertModel( const mm::Model& inputModel, PointSet& outputModel ) {
   }
 }
 
-int Compare::pcqm( const mm::Model& modelA,
-                   const mm::Model& modelB,
-                   const mm::Image& mapA,
-                   const mm::Image& mapB,
-                   const double     radiusCurvature,
-                   const int        thresholdKnnSearch,
-                   const double     radiusFactor,
-                   mm::Model&       outputA,
-                   mm::Model&       outputB,
-                   const bool       verbose ) {
+int Compare::pcqm(
+    const mm::ModelPtr modelA,
+    const mm::ModelPtr modelB,
+    const std::vector<mm::ImagePtr>& mapSetA,
+    const std::vector<mm::ImagePtr>& mapSetB,
+    const double     radiusCurvature,
+    const int        thresholdKnnSearch,
+    const double     radiusFactor,
+    mm::ModelPtr outputA,
+    mm::ModelPtr outputB,
+    const bool       verbose)
+{
   // 1 - sample the models if needed
-  sampleIfNeeded( modelA, mapA, outputA );
-  sampleIfNeeded( modelB, mapB, outputB );
+  sampleIfNeeded( *modelA, mapSetA, *outputA );
+  sampleIfNeeded( *modelB, mapSetB, *outputB );
 
   // 2 - transcode to PCQM internal format
   PointSet inCloud1;
   PointSet inCloud2;
 
-  convertModel( outputA, inCloud1 );
-  convertModel( outputB, inCloud2 );
+  convertModel( *outputA, inCloud1 );
+  convertModel( *outputB, inCloud2 );
 
   // 3 - compute the metric
   // ModelA is Reference model
@@ -922,7 +965,7 @@ int Compare::pcqm( const mm::Model& modelA,
   // compute PSNR
   // we use outputA as reference for PSNR signal dynamic
   glm::vec3 minBox, maxBox;
-  mm::Geometry::computeBBox( outputA.vertices, minBox, maxBox );
+  mm::Geometry::computeBBox( outputA->vertices, minBox, maxBox );
   const double maxEnergy  = glm::length( maxBox - minBox );
   double       maxPcqm    = 1.0;
   double       pcqmScaled = ( pcqm / maxPcqm ) * maxEnergy;
@@ -995,20 +1038,22 @@ void fibonacciSphere( std::vector<glm::vec3>& points,
 }
 
 // compare two meshes using rasterization
-int Compare::ibsm( const mm::Model&   modelA,
-                   const mm::Model&   modelB,
-                   const mm::Image&   mapA,
-                   const mm::Image&   mapB,
-                   const bool         disableReordering,
-                   const uint32_t     resolution,
-                   const uint32_t     cameraCount,
-                   const glm::vec3&   camRotParams,
-                   const std::string& renderer,
-                   const std::string& outputPrefix,
-                   const bool         disableCulling,
-                   mm::Model&         outputA,
-                   mm::Model&         outputB,
-                   const bool         verbose ) {
+int Compare::ibsm( 
+    const mm::ModelPtr modelA,
+    const mm::ModelPtr modelB,
+    const std::vector<mm::ImagePtr>& mapSetA,
+    const std::vector<mm::ImagePtr>& mapSetB,
+    const bool         disableReordering,
+    const uint32_t     resolution,
+    const uint32_t     cameraCount,
+    const glm::vec3& camRotParams,
+    const std::string& renderer,
+    const std::string& outputPrefix,
+    const bool         disableCulling,
+    mm::ModelPtr outputA,
+    mm::ModelPtr outputB,
+    const bool         verbose)
+{
   if ( renderer == "gl12_raster" && !_hwRendererInitialized ) {
     // now initialize OpenGL contexts if needed
     // this part is valid for all the frames
@@ -1024,15 +1069,15 @@ int Compare::ibsm( const mm::Model&   modelA,
   if ( !disableReordering ) {
     // reorder the faces if needed, reordering is important for metric stability and
     // to get Infinite PSNR on equal meshes even with shuffled faces.
-    mm::reorder( modelA, "oriented", outputA );
-    mm::reorder( modelB, "oriented", outputB );
+    mm::reorder( *modelA, "oriented", *outputA );
+    mm::reorder( *modelB, "oriented", *outputB );
     if ( verbose )
       std::cout << "Time on mesh reordering = " << ( (float)( clock() - t1 ) ) / CLOCKS_PER_SEC << " sec." << std::endl;
   } else {
     // just replicate the input
     // outputs may have updated normals hereafter
-    outputA = modelA;
-    outputB = modelB;
+    *outputA = *modelA;
+    *outputB = *modelB;
     if ( verbose )
       std::cout << "Skipped reordering, time on mesh recopy = " << ( (float)( clock() - t1 ) ) / CLOCKS_PER_SEC
                 << " sec." << std::endl;
@@ -1054,8 +1099,8 @@ int Compare::ibsm( const mm::Model&   modelA,
   // computes the overall bbox
   glm::vec3 refBboxMin, refBboxMax;
   glm::vec3 disBboxMin, disBboxMax;
-  mm::Geometry::computeBBox( outputA.vertices, refBboxMin, refBboxMax, true );
-  mm::Geometry::computeBBox( outputB.vertices, disBboxMin, disBboxMax, true );
+  mm::Geometry::computeBBox( outputA->vertices, refBboxMin, refBboxMax, true );
+  mm::Geometry::computeBBox( outputB->vertices, disBboxMin, disBboxMax, true );
   mm::Geometry::computeBBox( refBboxMin, refBboxMax, disBboxMin, disBboxMax, bboxMin, bboxMax );
   double refDiagLength = glm::length( refBboxMax - refBboxMin );
   double disDiagLength = glm::length( disBboxMax - disBboxMin );
@@ -1088,19 +1133,19 @@ int Compare::ibsm( const mm::Model&   modelA,
       else _hwRenderer.enableCulling();
 
       _hwRenderer.render(
-        &outputA, &mapA, fbufferRef, zbufferRef, width, height, viewDir, viewUp, bboxMin, bboxMax, true, verbose );
+        outputA, mapSetA, fbufferRef, zbufferRef, width, height, viewDir, viewUp, bboxMin, bboxMax, true, verbose );
       _hwRenderer.render(
-        &outputB, &mapB, fbufferDis, zbufferDis, width, height, viewDir, viewUp, bboxMin, bboxMax, true, verbose );
+        outputB, mapSetB, fbufferDis, zbufferDis, width, height, viewDir, viewUp, bboxMin, bboxMax, true, verbose );
     } else {
       if ( disableCulling ) _swRenderer.disableCulling();
       else _swRenderer.enableCulling();
 
       _swRenderer.render(
-        &outputA, &mapA, fbufferRef, zbufferRef, width, height, viewDir, viewUp, bboxMin, bboxMax, true, verbose );
+        outputA, mapSetA, fbufferRef, zbufferRef, width, height, viewDir, viewUp, bboxMin, bboxMax, true, verbose );
       float depthRangeRef = _swRenderer.depthRange;
 
       _swRenderer.render(
-        &outputB, &mapB, fbufferDis, zbufferDis, width, height, viewDir, viewUp, bboxMin, bboxMax, true, verbose );
+        outputB, mapSetB, fbufferDis, zbufferDis, width, height, viewDir, viewUp, bboxMin, bboxMax, true, verbose );
       float depthRangeDis = _swRenderer.depthRange;
 
       if ( depthRangeRef != depthRangeDis ) {  // should never occur

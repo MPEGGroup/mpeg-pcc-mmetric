@@ -18,6 +18,32 @@ do
 	grep -iF "error" ${TMP}/${OUT}.txt
 	fileHasString ${TMP}/${OUT}.txt "Render ${renderer}_raster" 1
 
+	# use multimap defined by material file
+	OUT=render_plane_multimap_mtl_1K_${renderer}
+	echo $OUT
+	$CMD render --renderer ${renderer}_raster --width=1024 --height=1024 --inputModel ${DATA}/plane_multi_map.obj \
+		--outputImage ${TMP}/${OUT}.png --outputDepth ${TMP}/${OUT}-depth.png > ${TMP}/${OUT}.txt 2>&1
+	grep -iF "error" ${TMP}/${OUT}.txt
+	fileHasString ${TMP}/${OUT}.txt "Render ${renderer}_raster" 1
+
+	# use multimap override texture names from command line (and swap texture compared to previous test left image is placed on the right and vice versa)
+	OUT=render_plane_multimap_cli_1K_${renderer}
+	echo $OUT
+	$CMD render --renderer ${renderer}_raster --width=1024 --height=1024 \
+	    --inputModel ${DATA}/plane_multi_map.obj --inputMap "${DATA}/basketball_player_00000001.png ${DATA}/plane.png" \
+		--outputImage ${TMP}/${OUT}.png --outputDepth ${TMP}/${OUT}-depth.png > ${TMP}/${OUT}.txt 2>&1
+	grep -iF "error" ${TMP}/${OUT}.txt
+	fileHasString ${TMP}/${OUT}.txt "Render ${renderer}_raster" 1
+	
+	# use multimap override texture names from command line: set only first is invalid, leads to a red color used for all maps
+	OUT=render_plane_multimap_cli_first_1K_${renderer}
+	echo $OUT
+	$CMD render --renderer ${renderer}_raster --width=1024 --height=1024 \
+	    --inputModel ${DATA}/plane_multi_map.obj --inputMap "${DATA}/plane.png" \
+		--outputImage ${TMP}/${OUT}.png --outputDepth ${TMP}/${OUT}-depth.png > ${TMP}/${OUT}.txt 2>&1
+	grep -iF "error" ${TMP}/${OUT}.txt
+	fileHasString ${TMP}/${OUT}.txt "Render ${renderer}_raster" 1
+
 	# no map, no color
 	OUT=render_sphere_4K_${renderer}
 	echo $OUT
@@ -29,6 +55,18 @@ do
 	# extended tests
 	if [ "$1" == "ext" ]; 
 	then
+
+		OUT=render_basket_ply_map_light_4K_${renderer}
+		echo $OUT
+		$CMD render \
+			--renderer ${renderer}_raster --width=4096 --height=4096 --viewDir="0.0 0.0 -1.0" \
+			--enableCulling \
+			--enableLighting --autoLightPosition --lightAutoDir="-1.0 1.0 -1.0" \
+			--inputModel ${DATA}/basketball_player_00000001.ply \
+			--inputMap  ${DATA}/basketball_player_00000001.png \
+			--outputImage ${TMP}/${OUT}.png --outputDepth ${TMP}/${OUT}-depth.png > ${TMP}/${OUT}.txt 2>&1
+		grep -iF "error" ${TMP}/${OUT}.txt
+		fileHasString ${TMP}/${OUT}.txt "Render ${renderer}_raster" 1
 
 		OUT=render_basket_map_light_4K_${renderer}
 		echo $OUT

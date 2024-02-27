@@ -1,0 +1,26 @@
+mtllib plane_multi_map.mtl
+v -5 -5 0
+v -5 5  0
+v 5  5  0
+v 5  -5 0
+v 0  0  0
+v 5 -5 0
+v 5 5  0
+v 15  5  0
+v 15  -5 0
+v 10  0  0
+vt 0 0
+vt 0 1
+vt 1 1
+vt 1 0
+vt 0.5 0.5
+usemtl material0000
+f 1/1 2/2 5/5
+f 2/2 3/3 5/5
+f 3/3 4/4 5/5
+f 4/4 1/1 5/5
+usemtl material0001
+f 6/1 7/2 10/5
+f 7/2 8/3 10/5
+f 8/3 9/4 10/5
+f 9/4 6/1 10/5

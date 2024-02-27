@@ -24,6 +24,7 @@
 #include <set>
 #include <map>
 #include <vector>
+#include <memory>
 #include <algorithm>
 #include <functional>
 // mathematics
@@ -105,6 +106,8 @@ class Model {
     faceNormals.clear();
     triangles.clear();
     trianglesuv.clear();
+    materialNames.clear();
+    triangleMatIdx.clear();
     perVertexTriangles.clear();
     // following are updated by computeNeighborTriangles
     perTriangleNeighborTriangles.clear();
@@ -369,6 +372,18 @@ struct CompareVertex {
   }
 };
 
+typedef std::shared_ptr<Model> ModelPtr;
+
+// return true if the model is at least a point set
+inline bool isValid(Model& model) {
+    return model.vertices.size() != 0;
+}
+
+// return true model is non null and if the model is at least a point set
+inline bool isValid(ModelPtr model) {
+    return model != nullptr && isValid(*model);
+}
+
 // Utility class to create Models using vertex
 // search for compact indexing and duplicate vertex removal
 class ModelBuilder {
@@ -422,15 +437,15 @@ class ModelBuilder {
   // if texmap is valid and uv available,
   // vertex color will be set with map texel using nearest or bilinear filter
   // otherwise per vertex color will be used if exists
-  void pushVertex( const Vertex& v, const Image& tex_map, const bool bilinear ) {
-    if ( v.hasUVCoord && tex_map.data != NULL ) {
+  void pushVertex( const Vertex& v, const ImagePtr image, const bool bilinear ) {
+    if ( v.hasUVCoord && isValid(image) ) {
       Vertex tmp = v;
 
       // fetch the color from the map
       if ( bilinear )
-        texture2D_bilinear( tex_map, v.uv, tmp.col );
+        texture2D_bilinear( *image, v.uv, tmp.col );
       else
-        texture2D( tex_map, v.uv, tmp.col );
+        texture2D( *image, v.uv, tmp.col );
 
       tmp.hasUVCoord = false;
       tmp.hasColor   = true;
@@ -518,6 +533,8 @@ inline bool reindex( const Model& input, Model& output ) {
       for ( size_t i = 0; i < 2; i++ ) { output.uvcoords.push_back( input.uvcoords[idx.second * 2 + i] ); }
     }
   }
+  // the order of triangles is not changed, only their vertex indices
+  output.triangleMatIdx = input.triangleMatIdx;
 
   return true;
 }

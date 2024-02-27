@@ -103,11 +103,17 @@ inline bool parseVec4( const std::string& s, glm::vec4& res ) {
 }
 
 // split a string containing spaces into sub strings
-inline bool splitString( const std::string& str, std::vector<std::string>& urlsList ) {
+// returns a one element list with "" if str is ""
+// this permits to make a distinction with parameter forced to empty string and 
+// a parameter not defined. This prevents from doing the test in every command.
+inline bool parseStringList( const std::string& str, std::vector<std::string>& urlsList ) {
   std::istringstream       iss( str );
   std::string              token;
   while ( std::getline( iss, token, ' ' ) ) {
     if ( !token.empty() ) { urlsList.push_back( token ); }
+  }
+  if (urlsList.empty()) {
+      urlsList.push_back("");
   }
   return true;
 }

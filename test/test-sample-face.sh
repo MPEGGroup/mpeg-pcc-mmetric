@@ -70,11 +70,11 @@ if [ "$1" == "" ] || [ "$1" == "ext" ] ||  [ "$1" == "$OUT" ]; then
 	# no ref (takes some space in the git	
 fi
 
-# test degenerate triangle
+# test degenerate triangle (force texture map to "" to disable)
 OUT=sample_face_degenerate
 if [ "$1" == "" ] || [ "$1" == "ext" ] ||  [ "$1" == "$OUT" ]; then
 	echo $OUT
-	$CMD sample -i ${DATA}/degenerate.obj -o ${TMP}/${OUT}.ply --mode face --hideProgress --resolution 10 \
+	$CMD sample -i ${DATA}/degenerate.obj -m "" -o ${TMP}/${OUT}.ply --mode face --hideProgress --resolution 10 \
 	--outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 	grep -iF "error" ${TMP}/${OUT}.txt
 	fileHasString ${TMP}/${OUT}.txt "Skipped 1 degenerate triangles" 1

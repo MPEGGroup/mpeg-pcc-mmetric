@@ -55,10 +55,10 @@ echo $OUT
 $CMD sample -i ${DATA}/sphere.obj -o ${TMP}/${OUT}.ply --mode ediv --resolution 30 --hideProgress --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 grep -iF "error" ${TMP}/${OUT}.txt # no reference, file too large to store in git
 	
-# test degenerate triangle
+# test degenerate triangle (force texture map to "" to disable)
 OUT=sample_ediv_degenerate_res_10
 echo $OUT
-$CMD sample -i ${DATA}/degenerate.obj -o ${TMP}/${OUT}.ply --mode ediv --resolution 10 --hideProgress --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
+$CMD sample -i ${DATA}/degenerate.obj -m "" -o ${TMP}/${OUT}.ply --mode ediv --resolution 10 --hideProgress --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 grep -iF "error" ${TMP}/${OUT}.txt
 fileHasString ${TMP}/${OUT}.txt "Skipped 1 degenerate triangles" 1
 

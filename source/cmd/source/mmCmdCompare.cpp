@@ -183,13 +183,11 @@ bool CmdCompare::initialize( Context* context, std::string app, int argc, char* 
       }
     }
     // Optional input texture maps
-    //if ( result.count( "inputMapA" ) ) _inputTextureAFilename = result["inputMapA"].as<std::string>();
     if (result.count("inputMapA")) {
-        splitString(result["inputMapA"].as<std::string>(), _inputTextureAFilenames);
+        parseStringList(result["inputMapA"].as<std::string>(), _inputTextureAFilenames);
     }
-    //if ( result.count( "inputMapB" ) ) _inputTextureBFilename = result["inputMapB"].as<std::string>();
     if (result.count("inputMapB")) {
-        splitString(result["inputMapB"].as<std::string>(), _inputTextureBFilenames);
+        parseStringList(result["inputMapB"].as<std::string>(), _inputTextureBFilenames);
     }
 
     // Optional
@@ -277,194 +275,107 @@ std::ofstream& openOutputFile( const std::string& fileName, std::ofstream& fileO
   //
   return fileOut;
 };
-
-// func to concatenate all textures horizontally of a file with multiple textures
-void concatenateTextures(mm::Model& inputModel, std::vector<mm::Image*>& textureMapList, mm::Image& textureMap) {
-    auto listOfIndices = inputModel.triangleMatIdx;
-    std::sort(listOfIndices.begin(), listOfIndices.end());
-    listOfIndices.erase(unique(listOfIndices.begin(), listOfIndices.end()), listOfIndices.end());
-    if (listOfIndices.size() <= 1) {
-        //only one texture, no need to do anything, just copy the texture
-        textureMap.reset(textureMapList[0]->width, textureMapList[0]->height);
-        for (int h = 0; h < textureMapList[0]->height; h++)
-            for (int w = 0; w < textureMapList[0]->width; w++) {
-                glm::vec3 rgb;
-                textureMapList[0]->fetchRGB(w, h, rgb);
-                textureMap.storeRGB(w, h, rgb);
-            }
-
-        return;
+bool CmdCompare::process(uint32_t frame) {
+    
+    // the input
+    mm::ModelPtr inputModelA = mm::IO::loadModel(_inputModelAFilename);
+    if (!inputModelA) { return false; }
+    if (inputModelA->vertices.size() == 0) {
+        std::cout << "Error: input model from " << _inputModelAFilename << " has no vertices" << std::endl;
+        return false;
     }
-    int newWidth = 0;
-    int newHeight = 0;
-    for (auto idx : listOfIndices)
-    {
-        newWidth += textureMapList[idx]->width;
-        newHeight = std::max(newHeight, textureMapList[idx]->height);
+    mm::ModelPtr inputModelB = mm::IO::loadModel(_inputModelBFilename);
+    if (!inputModelB ) { return false; }
+    if (inputModelB->vertices.size() == 0) {
+        std::cout << "Error: input model from " << _inputModelBFilename << " has no vertices" << std::endl;
+        return false;
     }
-    textureMap.reset(newWidth, newHeight);
-    int posHor = 0;
-    std::vector<bool> updatedUV;
-    updatedUV.resize(inputModel.getUvCount(), false);
-    for (auto idx : listOfIndices) {
-        // place texture
-        for (int h = 0; h < textureMapList[idx]->height; h++)
-            for (int w = 0; w < textureMapList[idx]->width; w++) {
-                glm::vec3 rgb;
-                textureMapList[idx]->fetchRGB(w, h, rgb);
-                textureMap.storeRGB(posHor + w, h, rgb);
+
+    // the output models if any
+    mm::ModelPtr outputModelA(new mm::Model());
+    mm::ModelPtr outputModelB(new mm::Model());
+    int res = 2;
+
+    // now handle the textures
+    std::vector<std::string> textureMapAUrls;
+    if (_inputTextureAFilenames.size() != 0)
+        textureMapAUrls = _inputTextureAFilenames;
+    else 
+        textureMapAUrls = inputModelA->textureMapUrls;
+
+    // does nothing if lists are empty
+    
+    std::vector<mm::ImagePtr> textureMapAList;
+    mm::IO::loadImages(textureMapAUrls, textureMapAList);
+    bool perVertexColorA = false;
+    if (textureMapAList.empty()) {
+        std::cout << "Skipping map read, will parse/use vertex color if any" << std::endl;
+        textureMapAList.push_back(mm::ImagePtr( new mm::Image() ));
+        textureMapAUrls.push_back("");
+        perVertexColorA = true;
+    }
+
+    std::vector<std::string> textureMapBUrls;
+    if (_inputTextureBFilenames.size() != 0)
+        textureMapBUrls = _inputTextureBFilenames;
+    else
+        textureMapBUrls = inputModelB->textureMapUrls;
+
+
+    std::vector<mm::ImagePtr> textureMapBList;
+    mm::IO::loadImages(textureMapBUrls, textureMapBList);
+    bool perVertexColorB = false;
+    if (textureMapBList.empty()) {
+        std::cout << "Skipping map read, will parse/use vertex color if any" << std::endl;
+        textureMapBList.push_back(mm::ImagePtr(new mm::Image()));
+        textureMapBUrls.push_back("");
+        perVertexColorB = true;
+    }
+
+    // create or open in append mode output csv if needed
+    std::streamoff csvFileLength = 0;
+    std::ofstream  csvFileOut;
+    openOutputFile(_outputCsvFilename, csvFileOut, csvFileLength);
+
+    // Perform the processings
+    clock_t t1 = clock();
+    if (_mode == "equ") {
+        std::cout << "Compare models for equality" << std::endl;
+        std::cout << "  Epsilon = " << _equEpsilon << std::endl;
+        res = _compare.equ(*inputModelA,
+            *inputModelB,
+            textureMapAList,
+            textureMapBList,
+            _equEpsilon,
+            _equEarlyReturn,
+            _equUnoriented,
+            *outputModelA,
+            *outputModelB);
+
+        // print the stats
+        if (csvFileOut) {
+            // print the header if file is empty
+            if (csvFileLength == 0) {
+                csvFileOut << "modelA;textureA;modelB;textureB;frame;epsilon;earlyReturn;unoriented;meshEquality;textureDiffs"
+                    << std::endl;
             }
-        // fix the uv coordinates
-        for (int i = 0; i < inputModel.triangleMatIdx.size(); i++) {
-            if (inputModel.triangleMatIdx[i] == idx) {
-                for (int j = 0; j < 3; j++) {
-                    auto& uvIdx = inputModel.trianglesuv[3 * i + j];
-                    if (updatedUV[uvIdx])
-                        continue;
-                    updatedUV[uvIdx] = true;
-                    auto uCoord = inputModel.uvcoords[2 * uvIdx];
-                    auto vCoord = inputModel.uvcoords[2 * uvIdx + 1];
-                    inputModel.uvcoords[2 * uvIdx] = ((float)posHor + (uCoord * (float)textureMapList[idx]->width) )/ (float)newWidth;
-                    inputModel.uvcoords[2 * uvIdx + 1] = 1 - (((1 - vCoord) * (float)textureMapList[idx]->height)) / (float)newHeight;
-                }
-                inputModel.triangleMatIdx[i] = 0;
-            }
+            // print stats
+            csvFileOut << _inputModelAFilename << ";" << textureMapAUrls[0] << ";" << _inputModelBFilename << ";"
+                << textureMapBUrls[0] << ";" << frame << ";" << _equEpsilon << ";" << _equEarlyReturn << ";"
+                << _equUnoriented << ";"
+                << "TODO"
+                << "TODO" << std::endl;
+            // done
+            csvFileOut.close();
         }
-        posHor += textureMapList[idx]->width;
     }
-    // for sanity check
-    //mm::IO::saveModel("merged_model.obj", &inputModel);
-    //mm::IO::_saveImage("merged_model.png", textureMap);
-}
-
-bool CmdCompare::process( uint32_t frame ) {
-
-  // the input
-  mm::Model* inputModelOrigA, * inputModelOrigB;
-  mm::Model inputModelA, inputModelB;
-  if ( ( inputModelOrigA = mm::IO::loadModel( _inputModelAFilename ) ) == NULL ) { return false; }
-  inputModelA = *inputModelOrigA;
-  if ( inputModelA.vertices.size() == 0 ) {
-    std::cout << "Error: input model from " << _inputModelAFilename << " has no vertices" << std::endl;
-    return false;
-  }
-  if ( ( inputModelOrigB = mm::IO::loadModel( _inputModelBFilename ) ) == NULL ) { return false; }
-  inputModelB = *inputModelOrigB;
-  if ( inputModelB.vertices.size() == 0 ) {
-    std::cout << "Error: input model from " << _inputModelBFilename << " has no vertices" << std::endl;
-    return false;
-  }
-
-  bool       perVertexColor = false;
-  std::vector<std::string> textureMapAUrls;
-  if (_inputTextureAFilenames.size() != 0)
-  {
-      if (_inputTextureAFilenames.size() == 1)
-      {
-          // check if the filename existis, otherwise try the URLs from the OBJ
-          if (_inputTextureAFilenames[0].substr(_inputTextureAFilenames[0].size() - 4, 1) == ".") {
-              textureMapAUrls = _inputTextureAFilenames;
-          } else textureMapAUrls = inputModelA.textureMapUrls;
-      } else textureMapAUrls = _inputTextureAFilenames;
-  } else textureMapAUrls = inputModelA.textureMapUrls;
-
-  std::string inputTextureAFilenames = textureMapAUrls.size() > 0 ? textureMapAUrls[0] : "";
-  for (int i = 1; i < textureMapAUrls.size(); i++)
-      inputTextureAFilenames = inputTextureAFilenames + " " + textureMapAUrls[i];
-  mm::Image* textureMapA = new mm::Image();
-  std::vector<mm::Image*> textureMapAList;
-  // does nothing if lists are empty
-  mm::IO::loadImages(textureMapAUrls, textureMapAList);
-  if (textureMapAList.size() == 0) {
-      std::cout << "Skipping map read, will parse use vertex color if any" << std::endl;
-      perVertexColor = true;
-  }
-  else {
-      // concatenate all texture maps horizontally and update the uvcoords
-      concatenateTextures(inputModelA, textureMapAList, *textureMapA);
-  }
-  std::vector<std::string> textureMapBUrls;
-  if (_inputTextureBFilenames.size() != 0)
-  {
-      if (_inputTextureBFilenames.size() == 1)
-      {
-          // check if the filename existis, otherwise try the URLs from the OBJ
-          if (_inputTextureBFilenames[0].substr(_inputTextureBFilenames[0].size() - 4, 1) == ".") {
-              textureMapBUrls = _inputTextureBFilenames;
-          }
-          else textureMapBUrls = inputModelB.textureMapUrls;
-      }
-      else textureMapBUrls = _inputTextureBFilenames;
-  }
-  else textureMapBUrls = inputModelB.textureMapUrls;
-  std::string inputTextureBFilenames = textureMapBUrls.size() > 0 ? textureMapBUrls[0] : "";
-  for (int i = 1; i < inputModelB.textureMapUrls.size(); i++)
-      inputTextureBFilenames = inputTextureBFilenames + " " + textureMapBUrls[i];
-  mm::Image* textureMapB = new mm::Image();
-  std::vector<mm::Image*> textureMapBList;
-  // does nothing if lists are empty
-  mm::IO::loadImages(textureMapBUrls, textureMapBList);
-  if (textureMapBList.size() == 0) {
-      std::cout << "Skipping map read, will parse use vertex color if any" << std::endl;
-      perVertexColor = true;
-  }
-  else {
-      if (perVertexColor) {
-          std::cout << "Error: inputs model colors are not homogeneous " << std::endl;
-          return false;
-      }
-      // concatenate all texture maps horizontally and update the uvcoords
-      concatenateTextures(inputModelB, textureMapBList, *textureMapB);
-  }
-  // the output models if any
-  mm::Model* outputModelA = new mm::Model();
-  mm::Model* outputModelB = new mm::Model();
-  int        res          = 2;
-
-  // create or open in append mode output csv if needed
-  std::streamoff csvFileLength = 0;
-  std::ofstream  csvFileOut;
-  openOutputFile( _outputCsvFilename, csvFileOut, csvFileLength );
-
-  // Perform the processings
-  clock_t t1 = clock();
-  if (_mode == "equ") {
-      std::cout << "Compare models for equality" << std::endl;
-      std::cout << "  Epsilon = " << _equEpsilon << std::endl;
-      res = _compare.equ(inputModelA,
-          inputModelB,
-          *textureMapA,
-          *textureMapB,
-          _equEpsilon,
-          _equEarlyReturn,
-          _equUnoriented,
-          *outputModelA,
-          *outputModelB);
-
-      // print the stats
-      if (csvFileOut) {
-          // print the header if file is empty
-          if (csvFileLength == 0) {
-              csvFileOut << "modelA;textureA;modelB;textureB;frame;epsilon;earlyReturn;unoriented;meshEquality;textureDiffs"
-                  << std::endl;
-          }
-          // print stats
-          csvFileOut << _inputModelAFilename << ";" << inputTextureAFilenames << ";" << _inputModelBFilename << ";"
-              << inputTextureBFilenames << ";" << frame << ";" << _equEpsilon << ";" << _equEarlyReturn << ";"
-              << _equUnoriented << ";"
-              << "TODO"
-              << "TODO" << std::endl;
-          // done
-          csvFileOut.close();
-      }
-  }
-  else if (_mode == "eqTFAN") {
+    else if (_mode == "eqTFAN") {
         std::cout << "Compare models for equality by using TFAN" << std::endl;
         std::cout << "  eqTFAN_Epsilon = " << _eqTFANEpsilon << std::endl;
-        res = _compare.eqTFAN(inputModelA,
-            inputModelB,
-            *textureMapA,
-            *textureMapB,
+        res = _compare.eqTFAN(*inputModelA,
+            *inputModelB,
+            textureMapAList,
+            textureMapBList,
             _eqTFANEpsilon,
             _eqTFANEarlyReturn,
             _eqTFANUnoriented,
@@ -479,227 +390,235 @@ bool CmdCompare::process( uint32_t frame ) {
                     << std::endl;
             }
             // print stats
-            csvFileOut << _inputModelAFilename << ";" << inputTextureAFilenames << ";" << _inputModelBFilename << ";"
-                << inputTextureBFilenames << ";" << frame << ";" << _eqTFANEpsilon << ";" << _eqTFANEarlyReturn << ";"
+            csvFileOut << _inputModelAFilename << ";" << textureMapAUrls[0] << ";" << _inputModelBFilename << ";"
+                << textureMapBUrls[0] << ";" << frame << ";" << _eqTFANEpsilon << ";" << _eqTFANEarlyReturn << ";"
                 << _eqTFANUnoriented << ";"
                 << "TODO"
                 << "TODO" << std::endl;
             // done
             csvFileOut.close();
         }
-  } 
-  else if ( _mode == "topo" ) {
-    std::cout << "Compare models topology for equivalence" << std::endl;
-    std::cout << "  faceMapFile = " << _topoFaceMapFilename << std::endl;
-    std::string faceMapFilenameResolved = mm::IO::resolveName( _context->getFrame(), _topoFaceMapFilename );
-    std::cout << "  vertexMapFile = " << _topoVertexMapFilename << std::endl;
-    std::string vertexMapFilenameResolved = mm::IO::resolveName( _context->getFrame(), _topoVertexMapFilename );
-    res = _compare.topo( inputModelA, inputModelB, faceMapFilenameResolved, vertexMapFilenameResolved );
-
-    // print the stats
-    if ( csvFileOut ) {
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) {
-        csvFileOut << "modelA;textureA;modelB;textureB;faceMap;vertexMap;frame;equivalence" << std::endl;
-      }
-      // print stats
-      csvFileOut << _inputModelAFilename << ";" << inputTextureAFilenames << ";" << _inputModelBFilename << ";"
-                 << inputTextureBFilenames << ";" << faceMapFilenameResolved << ";" << vertexMapFilenameResolved << ";"
-                 << frame << ";"
-                 << "TODO" << std::endl;
-      // done
-      csvFileOut.close();
     }
-  } 
-  else if ( _mode == "pcc" ) {
-    std::cout << "Compare models using MPEG PCC distortion metric" << std::endl;
-    std::cout << "  singlePass = " << _pccParams.singlePass << std::endl;
-    std::cout << "  hausdorff = " << _pccParams.hausdorff << std::endl;
-    std::cout << "  color = " << _pccParams.bColor << std::endl;
-    std::cout << "  resolution = " << _pccParams.resolution << std::endl;
-    std::cout << "  neighborsProc = " << _pccParams.neighborsProc << std::endl;
-    std::cout << "  dropDuplicates = " << _pccParams.dropDuplicates << std::endl;
-    std::cout << "  averageNormals = " << _pccParams.bAverageNormals << std::endl;
+    else if (_mode == "topo") {
+        std::cout << "Compare models topology for equivalence" << std::endl;
+        std::cout << "  faceMapFile = " << _topoFaceMapFilename << std::endl;
+        std::string faceMapFilenameResolved = mm::IO::resolveName(_context->getFrame(), _topoFaceMapFilename);
+        std::cout << "  vertexMapFile = " << _topoVertexMapFilename << std::endl;
+        std::string vertexMapFilenameResolved = mm::IO::resolveName(_context->getFrame(), _topoVertexMapFilename);
+        res = _compare.topo(*inputModelA, *inputModelB, faceMapFilenameResolved, vertexMapFilenameResolved);
 
-    // just backup for logging because it might be modified by pcc function call if auto mode
-    float paramsResolution = _pccParams.resolution;
-    res =
-      _compare.pcc( inputModelA, inputModelB, *textureMapA, *textureMapB, _pccParams, *outputModelA, *outputModelB );
-
-    // print the stats
-    // TODO add all parameters in the output
-    if ( csvFileOut ) {
-      // retrieve  metric results
-      auto& frameResults = _compare.getPccResults();
-
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) {
-        csvFileOut << "p_inputModelA;"
-                   << "p_inputModelB;"
-                   << "p_inputMapA;"
-                   << "p_inputMapB;"
-                   << "p_singlePass;"
-                   << "p_hausdorff;"
-                   << "p_color;"
-                   << "p_resolution;"
-                   << "p_neighborsProc;"
-                   << "p_dropDuplicates;"
-                   << "p_averageNormals;"
-                   << "frame;"
-                   << "resolution;"
-                   << "c2c_psnr;"
-                   << "haus_c2c_psnr;"
-                   << "c2p_psnr;"
-                   << "hausc2p_psnr;"
-                   << "color_psnr[0];"
-                   << "color_psnr[1];"
-                   << "color_psnr[2];"
-                   << "haus_rgb_psnr[0];"
-                   << "haus_rgb_psnr[1];"
-                   << "haus_rgb_psnr[2]" << std::endl;
-      }
-      // print stats
-      csvFileOut << _inputModelAFilename << ";"                             // inputModelA
-                 << _inputModelBFilename << ";"                             // inputModelB
-                 << inputTextureAFilenames << ";"                           // inputMapA
-                 << inputTextureBFilenames << ";"                           // inputMapB
-                 << _pccParams.singlePass << ";"                            // singlePass
-                 << _pccParams.hausdorff << ";"                             // hausdorff
-                 << _pccParams.bColor << ";"                                // color
-                 << paramsResolution << ";"                                 // resolution
-                 << _pccParams.neighborsProc << ";"                         // neighborsProc
-                 << _pccParams.dropDuplicates << ";"                        // dropDuplicates
-                 << _pccParams.bAverageNormals << ";"                       // averageNormals
-                 << frame << ";"                                            // frame
-                 << _pccParams.resolution << ";"                            // resolution
-                 << frameResults.second.c2c_psnr << ";"                     // c2c_psnr
-                 << frameResults.second.c2c_hausdorff_psnr << ";"           // haus_c2c_psnr
-                 << frameResults.second.c2p_psnr << ";"                     // c2p_psnr
-                 << frameResults.second.c2p_hausdorff_psnr << ";"           // hausc2p_psnr
-                 << frameResults.second.color_psnr[0] << ";"                // color_psnr[0]
-                 << frameResults.second.color_psnr[1] << ";"                // color_psnr[1]
-                 << frameResults.second.color_psnr[2] << ";"                // color_psnr[2]
-                 << frameResults.second.color_rgb_hausdorff_psnr[0] << ";"  // haus_rgb_psnr[0]
-                 << frameResults.second.color_rgb_hausdorff_psnr[1] << ";"  // haus_rgb_psnr[1]
-                 << frameResults.second.color_rgb_hausdorff_psnr[2]         // haus_rgb_psnr[2]
-                 << std::endl;
-      // done
-      csvFileOut.close();
+        // print the stats
+        if (csvFileOut) {
+            // print the header if file is empty
+            if (csvFileLength == 0) {
+                csvFileOut << "modelA;textureA;modelB;textureB;faceMap;vertexMap;frame;equivalence" << std::endl;
+            }
+            // print stats
+            csvFileOut << _inputModelAFilename << ";" << textureMapAUrls[0] << ";" << _inputModelBFilename << ";"
+                << textureMapBUrls[0] << ";" << faceMapFilenameResolved << ";" << vertexMapFilenameResolved << ";"
+                << frame << ";"
+                << "TODO" << std::endl;
+            // done
+            csvFileOut.close();
+        }
     }
-  } 
-  else if ( _mode == "pcqm" ) {
-    std::cout << "Compare models using PCQM distortion metric" << std::endl;
-    std::cout << "  radiusCurvature = " << _pcqmRadiusCurvature << std::endl;
-    std::cout << "  thresholdKnnSearch = " << _pcqmThresholdKnnSearch << std::endl;
-    std::cout << "  radiusFactor = " << _pcqmRadiusFactor << std::endl;
-    res = _compare.pcqm( inputModelA,
-                         inputModelB,
-                         *textureMapA,
-                         *textureMapB,
-                         _pcqmRadiusCurvature,
-                         _pcqmThresholdKnnSearch,
-                         _pcqmRadiusFactor,
-                         *outputModelA,
-                         *outputModelB );
-    // print the stats
-    // TODO add all parameters in the output
-    if ( csvFileOut ) {
-      // retrieve  metric results
-      auto& frameResults = _compare.getPcqmResults();
+    else if (_mode == "pcc") {
+        std::cout << "Compare models using MPEG PCC distortion metric" << std::endl;
+        std::cout << "  singlePass = " << _pccParams.singlePass << std::endl;
+        std::cout << "  hausdorff = " << _pccParams.hausdorff << std::endl;
+        std::cout << "  color = " << _pccParams.bColor << std::endl;
+        std::cout << "  resolution = " << _pccParams.resolution << std::endl;
+        std::cout << "  neighborsProc = " << _pccParams.neighborsProc << std::endl;
+        std::cout << "  dropDuplicates = " << _pccParams.dropDuplicates << std::endl;
+        std::cout << "  averageNormals = " << _pccParams.bAverageNormals << std::endl;
 
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) {
-        csvFileOut << "p_inputModelA;p_inputModelB;p_inputMapA;p_inputMapB;"
-                   << "p_radiusCurvature;p_thresholdKnnSearch;p_radiusFactor;"
-                   << "frame;pcqm;pcqm_psnr" << std::endl;
-      }
-      // print stats
-      csvFileOut << _inputModelAFilename << ";" << _inputModelBFilename << ";" << inputTextureAFilenames << ";"
-                 << inputTextureBFilenames << ";" << _pcqmRadiusCurvature << ";" << _pcqmThresholdKnnSearch << ";"
-                 << _pcqmRadiusFactor << ";" << frame << ";" << (double)std::get<1>( frameResults ) << ";"
-                 << (double)std::get<2>( frameResults ) << std::endl;
-      // done
-      csvFileOut.close();
+        // just backup for logging because it might be modified by pcc function call if auto mode
+        float paramsResolution = _pccParams.resolution;
+        res =
+            _compare.pcc(*inputModelA, *inputModelB, textureMapAList, textureMapBList, _pccParams, *outputModelA, *outputModelB);
+
+        // print the stats
+        // TODO add all parameters in the output
+        if (csvFileOut) {
+            // retrieve  metric results
+            auto& frameResults = _compare.getPccResults();
+
+            // print the header if file is empty
+            if (csvFileLength == 0) {
+                csvFileOut << "p_inputModelA;"
+                    << "p_inputModelB;"
+                    << "p_inputMapA;"
+                    << "p_inputMapB;"
+                    << "p_singlePass;"
+                    << "p_hausdorff;"
+                    << "p_color;"
+                    << "p_resolution;"
+                    << "p_neighborsProc;"
+                    << "p_dropDuplicates;"
+                    << "p_averageNormals;"
+                    << "frame;"
+                    << "resolution;"
+                    << "c2c_psnr;"
+                    << "haus_c2c_psnr;"
+                    << "c2p_psnr;"
+                    << "hausc2p_psnr;"
+                    << "color_psnr[0];"
+                    << "color_psnr[1];"
+                    << "color_psnr[2];"
+                    << "haus_rgb_psnr[0];"
+                    << "haus_rgb_psnr[1];"
+                    << "haus_rgb_psnr[2]" << std::endl;
+            }
+            // print stats
+            csvFileOut << _inputModelAFilename << ";"                             // inputModelA
+                << _inputModelBFilename << ";"                             // inputModelB
+                << textureMapAUrls[0] << ";"                           // inputMapA
+                << textureMapBUrls[0] << ";"                           // inputMapB
+                << _pccParams.singlePass << ";"                            // singlePass
+                << _pccParams.hausdorff << ";"                             // hausdorff
+                << _pccParams.bColor << ";"                                // color
+                << paramsResolution << ";"                                 // resolution
+                << _pccParams.neighborsProc << ";"                         // neighborsProc
+                << _pccParams.dropDuplicates << ";"                        // dropDuplicates
+                << _pccParams.bAverageNormals << ";"                       // averageNormals
+                << frame << ";"                                            // frame
+                << _pccParams.resolution << ";"                            // resolution
+                << frameResults.second.c2c_psnr << ";"                     // c2c_psnr
+                << frameResults.second.c2c_hausdorff_psnr << ";"           // haus_c2c_psnr
+                << frameResults.second.c2p_psnr << ";"                     // c2p_psnr
+                << frameResults.second.c2p_hausdorff_psnr << ";"           // hausc2p_psnr
+                << frameResults.second.color_psnr[0] << ";"                // color_psnr[0]
+                << frameResults.second.color_psnr[1] << ";"                // color_psnr[1]
+                << frameResults.second.color_psnr[2] << ";"                // color_psnr[2]
+                << frameResults.second.color_rgb_hausdorff_psnr[0] << ";"  // haus_rgb_psnr[0]
+                << frameResults.second.color_rgb_hausdorff_psnr[1] << ";"  // haus_rgb_psnr[1]
+                << frameResults.second.color_rgb_hausdorff_psnr[2]         // haus_rgb_psnr[2]
+                << std::endl;
+            // done
+            csvFileOut.close();
+        }
     }
-  } 
-  else if ( _mode == "ibsm" ) {
-    std::cout << "Compare models using IBSM distortion metric" << std::endl;
-    std::cout << "  ibsmRenderer = " << _ibsmRenderer << std::endl;
-    std::cout << "  ibsmCameraCount = " << _ibsmCameraCount << std::endl;
-    std::cout << "  ibsmCameraRotation = " << _ibsmCameraRotation << std::endl;
-    std::cout << "  ibsmResolution = " << _ibsmResolution << std::endl;
-    std::cout << "  ibsmDisableCulling = " << _ibsmDisableCulling << std::endl;
-    std::cout << "  ibsmOutputPrefix = " << _ibsmOutputPrefix << std::endl;
+    else if (_mode == "pcqm") {
+        std::cout << "Compare models using PCQM distortion metric" << std::endl;
+        std::cout << "  radiusCurvature = " << _pcqmRadiusCurvature << std::endl;
+        std::cout << "  thresholdKnnSearch = " << _pcqmThresholdKnnSearch << std::endl;
+        std::cout << "  radiusFactor = " << _pcqmRadiusFactor << std::endl;
+        res = _compare.pcqm(
+            inputModelA,
+            inputModelB,
+            textureMapAList,
+            textureMapBList,
+            _pcqmRadiusCurvature,
+            _pcqmThresholdKnnSearch,
+            _pcqmRadiusFactor,
+            outputModelA,
+            outputModelB);
+        // print the stats
+        // TODO add all parameters in the output
+        if (csvFileOut) {
+            // retrieve  metric results
+            auto& frameResults = _compare.getPcqmResults();
 
-    res = _compare.ibsm( inputModelA,
-                         inputModelB,
-                         *textureMapA,
-                         *textureMapB,
-                         _ibsmDisableReordering,
-                         _ibsmResolution,
-                         _ibsmCameraCount,
-                         _ibsmCamRotParams,
-                         _ibsmRenderer,
-                         _ibsmOutputPrefix,
-                         _ibsmDisableCulling,
-                         *outputModelA,
-                         *outputModelB );
-
-    // print the stats
-    if ( csvFileOut ) {
-      // retrieve  metric results
-      auto& frameResults = _compare.getIbsmResults();
-
-      // print the header if file is empty
-      if ( csvFileLength == 0 ) {
-        csvFileOut << "p_inputModelA;p_inputModelB;p_inputMapA;p_inputMapB;"
-                   << "p_ibsmRenderer;p_ibsmCameraCount;p_ibsmCameraRotation;p_ibsmResolution;"
-                   << "p_ibsmDisableCulling;p_ibsmOutputPrefix;"
-                   << "frame;geo_psnr;rgb_psnr;r_psnr;g_psnr;b_psnr;"
-                   << "yuv_psnr;y_psnr;u_psnr;v_psnr;processingTime" << std::endl;
-      }
-      // print stats
-      csvFileOut << _inputModelAFilename << ";" << _inputModelBFilename << ";" << inputTextureAFilenames << ";"
-                 << inputTextureBFilenames << ";" << _ibsmRenderer << ";" << _ibsmCameraCount << ";"
-                 << _ibsmCameraRotation << ";" << _ibsmResolution << ";" << _ibsmDisableCulling << ";"
-                 << _ibsmOutputPrefix << ";" << frame << ";" << frameResults.second.depthPSNR << ";"
-                 << frameResults.second.rgbPSNR[3] << ";" << frameResults.second.rgbPSNR[0] << ";"
-                 << frameResults.second.rgbPSNR[1] << ";" << frameResults.second.rgbPSNR[2] << ";"
-                 << frameResults.second.yuvPSNR[3] << ";" << frameResults.second.yuvPSNR[0] << ";"
-                 << frameResults.second.yuvPSNR[1] << ";" << frameResults.second.yuvPSNR[2] << ";"
-                 << ( (float)( clock() - t1 ) ) / CLOCKS_PER_SEC << std::endl;
-      // done
-      csvFileOut.close();
+            // print the header if file is empty
+            if (csvFileLength == 0) {
+                csvFileOut << "p_inputModelA;p_inputModelB;p_inputMapA;p_inputMapB;"
+                    << "p_radiusCurvature;p_thresholdKnnSearch;p_radiusFactor;"
+                    << "frame;pcqm;pcqm_psnr" << std::endl;
+            }
+            // print stats
+            csvFileOut << _inputModelAFilename << ";" << _inputModelBFilename << ";" << textureMapAUrls[0] << ";"
+                << textureMapBUrls[0] << ";" << _pcqmRadiusCurvature << ";" << _pcqmThresholdKnnSearch << ";"
+                << _pcqmRadiusFactor << ";" << frame << ";" << (double)std::get<1>(frameResults) << ";"
+                << (double)std::get<2>(frameResults) << std::endl;
+            // done
+            csvFileOut.close();
+        }
     }
-  } 
-  else {
-    std::cerr << "Error: invalid --mode " << _mode << std::endl;
-    return false;
-  }
-  clock_t t2 = clock();
-  std::cout << "Time on processing: " << ( (float)( t2 - t1 ) ) / CLOCKS_PER_SEC << " sec." << std::endl;
+    else if (_mode == "ibsm") {
+        std::cout << "Compare models using IBSM distortion metric" << std::endl;
+        std::cout << "  ibsmRenderer = " << _ibsmRenderer << std::endl;
+        std::cout << "  ibsmCameraCount = " << _ibsmCameraCount << std::endl;
+        std::cout << "  ibsmCameraRotation = " << _ibsmCameraRotation << std::endl;
+        std::cout << "  ibsmResolution = " << _ibsmResolution << std::endl;
+        std::cout << "  ibsmDisableCulling = " << _ibsmDisableCulling << std::endl;
+        std::cout << "  ibsmOutputPrefix = " << _ibsmOutputPrefix << std::endl;
 
-  // save the result
-  if ( _outputModelAFilename != "" ) {
-    if ( !mm::IO::saveModel( _outputModelAFilename, outputModelA ) ) return false;
-  } else {
-    delete outputModelA;
-  }
-  // save the result
-  if ( _outputModelBFilename != "" ) {
-    if ( !mm::IO::saveModel( _outputModelBFilename, outputModelB ) ) return false;
-  } else {
-    delete outputModelB;
-  }
-  // success
-  std::cout << "return " << res << std::endl;
-  return true;
+        res = _compare.ibsm(
+            inputModelA,
+            inputModelB,
+            textureMapAList,
+            textureMapBList,
+            _ibsmDisableReordering,
+            _ibsmResolution,
+            _ibsmCameraCount,
+            _ibsmCamRotParams,
+            _ibsmRenderer,
+            _ibsmOutputPrefix,
+            _ibsmDisableCulling,
+            outputModelA,
+            outputModelB);
+
+        // print the stats
+        if (csvFileOut) {
+            // retrieve  metric results
+            auto& frameResults = _compare.getIbsmResults();
+
+            // print the header if file is empty
+            if (csvFileLength == 0) {
+                csvFileOut << "p_inputModelA;p_inputModelB;p_inputMapA;p_inputMapB;"
+                    << "p_ibsmRenderer;p_ibsmCameraCount;p_ibsmCameraRotation;p_ibsmResolution;"
+                    << "p_ibsmDisableCulling;p_ibsmOutputPrefix;"
+                    << "frame;geo_psnr;rgb_psnr;r_psnr;g_psnr;b_psnr;"
+                    << "yuv_psnr;y_psnr;u_psnr;v_psnr;processingTime" << std::endl;
+            }
+            // print stats
+            csvFileOut << _inputModelAFilename << ";" << _inputModelBFilename << ";" << textureMapAUrls[0] << ";"
+                << textureMapBUrls[0] << ";" << _ibsmRenderer << ";" << _ibsmCameraCount << ";"
+                << _ibsmCameraRotation << ";" << _ibsmResolution << ";" << _ibsmDisableCulling << ";"
+                << _ibsmOutputPrefix << ";" << frame << ";" << frameResults.second.depthPSNR << ";"
+                << frameResults.second.rgbPSNR[3] << ";" << frameResults.second.rgbPSNR[0] << ";"
+                << frameResults.second.rgbPSNR[1] << ";" << frameResults.second.rgbPSNR[2] << ";"
+                << frameResults.second.yuvPSNR[3] << ";" << frameResults.second.yuvPSNR[0] << ";"
+                << frameResults.second.yuvPSNR[1] << ";" << frameResults.second.yuvPSNR[2] << ";"
+                << ((float)(clock() - t1)) / CLOCKS_PER_SEC << std::endl;
+            // done
+            csvFileOut.close();
+        }
+    }
+    else {
+        std::cerr << "Error: invalid --mode " << _mode << std::endl;
+        return false;
+    }
+    clock_t t2 = clock();
+    std::cout << "Time on processing: " << ((float)(t2 - t1)) / CLOCKS_PER_SEC << " sec." << std::endl;
+
+    // save the result
+    if (_outputModelAFilename != "") {
+        outputModelA->header = inputModelA->header;               // preserve material
+        outputModelA->materialNames = inputModelA->materialNames;    // preserve material
+        outputModelA->textureMapUrls = inputModelA->textureMapUrls;  // preserve material
+        outputModelA->comments = inputModelA->comments;
+        if (!mm::IO::saveModel(_outputModelAFilename, outputModelA)) return false;
+    }
+
+    // save the result
+    if (_outputModelBFilename != "") {
+        outputModelB->header = inputModelB->header;               // preserve material
+        outputModelB->materialNames = inputModelB->materialNames;    // preserve material
+        outputModelB->textureMapUrls = inputModelB->textureMapUrls;  // preserve material
+        outputModelB->comments = inputModelB->comments;
+        if (!mm::IO::saveModel(_outputModelBFilename, outputModelB)) return false;
+    }
+
+    // success
+    std::cout << "return " << res << std::endl;
+    return true;
 }
 
 bool CmdCompare::finalize() {
-  // Collect the statistics
-  if ( _mode == "pcc" ) { _compare.pccFinalize(); }
-  if ( _mode == "pcqm" ) { _compare.pcqmFinalize(); }
-  if ( _mode == "ibsm" ) { _compare.ibsmFinalize(); }
-  return true;
+    // Collect the statistics
+    if (_mode == "pcc") { _compare.pccFinalize(); }
+    if (_mode == "pcqm") { _compare.pcqmFinalize(); }
+    if (_mode == "ibsm") { _compare.ibsmFinalize(); }
+    return true;
 }

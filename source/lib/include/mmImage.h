@@ -22,6 +22,8 @@
 #include <cstring>
 #include <cmath>
 #include <algorithm>
+#include <memory>
+#include <vector>
 
 #include "glm/glm.hpp"
 
@@ -63,6 +65,14 @@ class Image {
     data = new unsigned char[width * height * nbc];
     std::memcpy( data, img.data, width * height * nbc );
     return *this;
+  }
+
+  // reset the map (resize if needed) - no default value
+  inline void reset() {
+      delete[] data; data = NULL;
+      width = 0;
+      height = 0;
+      nbc = 0;
   }
 
   // reset the map (resize if needed) - no default value
@@ -152,6 +162,30 @@ inline void texture2D_bilinear( const Image& texMap, const glm::vec2& uv, glm::v
   const glm::vec3 tA = glm::mix( tl, tr, f.x );
   const glm::vec3 tB = glm::mix( bl, br, f.x );
   rgb                = glm::mix( tA, tB, f.y );
+}
+
+typedef std::shared_ptr<Image> ImagePtr;
+
+// return true if the image buffer is allocated and at least one pixel
+inline bool isValid(Image& img) {
+    return img.width > 0 && img.height > 0 && img.data != NULL;
+}
+
+// return true if img is not null and the image buffer is allocated and at least one pixel
+inline bool isValid(ImagePtr img) {
+    return img != nullptr && isValid(*img);
+}
+
+// returns the image of index mapIdx
+// It may fallback to first image the index does not exist
+// It may return null if the image of index Idx is null or if images is empty.
+// Result must be checked before use
+inline ImagePtr getImage(const std::vector<mm::ImagePtr>& images, int mapIdx) {
+    if (mapIdx < images.size())
+        return images[mapIdx];
+    if (images.size() != 0)
+        return images[0];
+    return ImagePtr();
 }
 
 }  // namespace mm

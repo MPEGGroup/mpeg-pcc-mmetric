@@ -214,19 +214,27 @@ bool RendererHw::shutdown( void ) {
   return true;
 }
 
-bool RendererHw::render( Model*                model,
-                         const Image*          map,
-                         std::vector<uint8_t>& fbuffer,
-                         std::vector<float>&   zbuffer,
-                         const unsigned int    width,
-                         const unsigned int    height,
-                         const glm::vec3&      viewDir,
-                         const glm::vec3&      viewUp,
-                         const glm::vec3&      bboxMin,
-                         const glm::vec3&      bboxMax,
-                         bool                  useBBox,
-                         const bool            verbose ) {
-  const Model* rndModel = model;
+bool RendererHw::render(
+    ModelPtr model,
+    const std::vector<mm::ImagePtr>& mapSet,
+    std::vector<uint8_t>& fbuffer,
+    std::vector<float>& zbuffer,
+    const unsigned int    width,
+    const unsigned int    height,
+    const glm::vec3& viewDir,
+    const glm::vec3& viewUp,
+    const glm::vec3& bboxMin,
+    const glm::vec3& bboxMax,
+    const bool useBBox,
+    const bool verbose)
+{
+  ModelPtr rndModel = model;
+  // JEM: for the time beeing HW render does not support multi-textures
+  const auto map = ( mapSet.size() != 0 ) ? mapSet[0] : ImagePtr(); 
+
+  if (mapSet.size() > 1) {
+      std::cout << "Warning: hardware rendere does not support multi-texture, will default using first texture" << std::endl;
+  }
 
   GLuint VAO, vertex_buffer, color_buffer, texcoord_buffer, triangles_buffer;
 #ifdef __APPLE__
@@ -238,20 +246,18 @@ bool RendererHw::render( Model*                model,
 
   clock_t t1 = clock();
 
-  Model* tmpModel = NULL;
-
   // test if we render cpv and maps
   if ( model->trianglesuv.size() != 0 ) {
     if ( verbose ) std::cout << "Reindexing the model" << std::endl;
     t1       = clock();
-    tmpModel = new Model();
+    ModelPtr tmpModel( new Model() );
     reindex( *model, *tmpModel );
     rndModel = tmpModel;
     if ( verbose )
       std::cout << "Time on reindexing: " << ( (float)( clock() - t1 ) ) / CLOCKS_PER_SEC << " sec." << std::endl;
   }
-  bool useCpv = rndModel->colors.size() == rndModel->vertices.size() && map == NULL;
-  bool useMap = rndModel->uvcoords.size() != 0 && map != NULL;
+  bool useCpv = rndModel->colors.size() == rndModel->vertices.size() && !isValid(map);
+  bool useMap = rndModel->uvcoords.size() != 0 && isValid(map);
 
   t1 = clock();
 
@@ -497,31 +503,31 @@ bool RendererHw::render( Model*                model,
 
   if ( verbose )
     std::cout << "Time on readback: " << ( (float)( clock() - t1 ) ) / CLOCKS_PER_SEC << " sec." << std::endl;
-
-  if ( tmpModel != NULL ) delete tmpModel;
-
+  
   return true;
 }
 
-bool RendererHw::render( Model*             model,
-                         const Image*       map,
-                         const std::string& outputImage,
-                         const std::string& outputDepth,
-                         const unsigned int width,
-                         const unsigned int height,
-                         const glm::vec3&   viewDir,
-                         const glm::vec3&   viewUp,
-                         const glm::vec3&   bboxMin,
-                         const glm::vec3&   bboxMax,
-                         bool               useBBox,
-                         const bool         verbose ) {
+bool RendererHw::render(
+    ModelPtr model,
+    const std::vector<mm::ImagePtr>& mapSet,
+    const std::string& outputImage,
+    const std::string& outputDepth,
+    const unsigned int width,
+    const unsigned int height,
+    const glm::vec3& viewDir,
+    const glm::vec3& viewUp,
+    const glm::vec3& bboxMin,
+    const glm::vec3& bboxMax,
+    const bool useBBox,
+    const bool verbose)
+{
   // allocate depth buffer - will be init by RendererSw::clear
   std::vector<float> zbuffer( width * height );
   // allocate frame buffer - will be init by RendererSw::clear
   std::vector<uint8_t> fbuffer( width * height * 4 );
 
   // render the model into memory buffers
-  render( model, map, fbuffer, zbuffer, width, height, viewDir, viewUp, bboxMin, bboxMax, useBBox, verbose );
+  render( model, mapSet, fbuffer, zbuffer, width, height, viewDir, viewUp, bboxMin, bboxMax, useBBox, verbose );
 
   clock_t t1 = clock();
 

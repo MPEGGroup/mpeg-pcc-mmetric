@@ -52,8 +52,8 @@ bool CmdRender::initialize( Context* ctx, std::string app, int argc, char* argv[
 		options.add_options()
 			("i,inputModel", "path to input model (obj or ply file)",
 				cxxopts::value<std::string>())
-			("m,inputMap", "path to input texture map (png, jpeg)",
-				cxxopts::value<std::string>())
+      ("m,inputMap", "path to input texture map (png, jpg, rgb, yuv), can be multiple paths surrounded by double quotes and separated by spaces.",
+        cxxopts::value<std::string>())
 			("o,outputImage", "path to output image (png file)",
 				cxxopts::value<std::string>()->default_value("output.png"))
 			("outputDepth", "path to output depth RGBA png file with 32bit float span on the four components. If empty string will not save depth (default behavior).",
@@ -107,7 +107,9 @@ bool CmdRender::initialize( Context* ctx, std::string app, int argc, char* argv[
       return false;
     }
     //
-    if ( result.count( "inputMap" ) ) inputTextureFilename = result["inputMap"].as<std::string>();
+    if (result.count("inputMap")) {
+        parseStringList(result["inputMap"].as<std::string>(), inputTextureFilenames);
+    }
     //
     if ( result.count( "outputImage" ) ) outputImageFilename = result["outputImage"].as<std::string>();
     //
@@ -201,22 +203,27 @@ bool CmdRender::finalize() {
 bool CmdRender::process( uint32_t frame ) {
   bool success = true;
 
-  // Reading map if needed
-  mm::Image* textureMap = NULL;
-  if ( inputTextureFilename != "" ) {
-    textureMap = mm::IO::loadImage( inputTextureFilename );
-    // we do not early return on map load error, will render anyway
-    success = ( textureMap != NULL );
-  } else {
-    std::cout << "Skipping map read, will parse use vertex color if any" << std::endl;
-  }
-
   // the input
-  mm::Model* inputModel = NULL;
-  if ( ( inputModel = mm::IO::loadModel( inputModelFilename ) ) == NULL ) { return false; }
+  mm::ModelPtr inputModel = mm::IO::loadModel(inputModelFilename);
+  if ( !inputModel ) { return false; }
   if ( inputModel->vertices.size() == 0 || inputModel->triangles.size() == 0 ) {
     std::cout << "Error: invalid input model from " << inputModelFilename << std::endl;
     return false;
+  }
+
+  // now handle the textures
+  std::vector<std::string> textureMapUrls;
+  if (inputTextureFilenames.size() != 0)
+      textureMapUrls = inputTextureFilenames;
+  else
+      textureMapUrls = inputModel->textureMapUrls;
+
+  std::vector<mm::ImagePtr> textureMapList;
+  mm::IO::loadImages(textureMapUrls, textureMapList);
+  if (textureMapList.empty()) {
+      std::cout << "Skipping map read, will parse/use vertex color if any" << std::endl;
+      textureMapList.push_back(mm::ImagePtr(new mm::Image()));
+      textureMapUrls.push_back("");
   }
 
   // resolve will be moved in the IO Image write once implemented
@@ -248,7 +255,7 @@ bool CmdRender::process( uint32_t frame ) {
       }
     }
     res = _swRenderer.render(
-      inputModel, textureMap, outImage, outDepth, width, height, viewDir, viewUp, bboxMin, bboxMax, bboxValid );
+      inputModel, textureMapList, outImage, outDepth, width, height, viewDir, viewUp, bboxMin, bboxMax, bboxValid );
   } else if ( renderer == "gl12_raster" ) {
     std::cout << "Render gl12_raster" << std::endl;
     std::cout << "  Width = " << width << std::endl;
@@ -257,7 +264,7 @@ bool CmdRender::process( uint32_t frame ) {
     std::cout << "  hideProgress = " << hideProgress << std::endl;
     _hwRenderer.setClearColor( clearColor );
     res = _hwRenderer.render(
-      inputModel, textureMap, outImage, outDepth, width, height, viewDir, viewUp, bboxMin, bboxMax, bboxValid );
+      inputModel, textureMapList, outImage, outDepth, width, height, viewDir, viewUp, bboxMin, bboxMax, bboxValid );
   } else {
     std::cout << "Error: invalid renderer " << renderer << std::endl;
     return false;

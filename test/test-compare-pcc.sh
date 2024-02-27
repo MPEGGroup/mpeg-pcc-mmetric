@@ -75,8 +75,8 @@ if [ "$1" == "ext" ] || [ "$1" == "$OUT" ]; then
 		--inputModelB ${TMPDATA}/basketball_player_00000001_qp8.obj --inputMapB  ${DATA}/basketball_player_00000001.png \
 		--outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 	grep -iF "error" ${TMP}/${OUT}.txt
-	fileHasString ${TMP}/${OUT}.txt "mseF,PSNR (p2plane): 67.6" 1
-	fileHasString ${TMP}/${OUT}.txt "c\[0\],PSNRF         : 32.4" 1
+	fileHasString ${TMP}/${OUT}.txt "mseF,PSNR (p2plane): 67.3" 1
+	fileHasString ${TMP}/${OUT}.txt "c\[0\],PSNRF         : 31.3" 1
 fi
 
 OUT=compare_pcc_basket_qp8_hole
@@ -87,18 +87,18 @@ if [ "$1" == "ext" ] || [ "$1" == "$OUT" ]; then
 		--inputModelB ${DATA}/basketball_player_00000001_qp8_hole.obj --inputMapB  ${DATA}/basketball_player_00000001.png \
 		--outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 	grep -iF "error" ${TMP}/${OUT}.txt
-	fileHasString ${TMP}/${OUT}.txt "mseF,PSNR (p2plane): 67.6" 1
-	fileHasString ${TMP}/${OUT}.txt "c\[0\],PSNRF         : 32.1" 1
+	fileHasString ${TMP}/${OUT}.txt "mseF,PSNR (p2plane): 67.3" 1
+	fileHasString ${TMP}/${OUT}.txt "c\[0\],PSNRF         : 31.0" 1
 fi
 
 OUT=compare_pcc_basket_qp16_nomap
 if [ "$1" == "ext" ] || [ "$1" == "$OUT" ]; then
 	echo $OUT
 	$CMD compare --mode pcc \
-		--inputModelA ${DATA}/basketball_player_00000001.obj  \
-		--inputModelB ${TMPDATA}/basketball_player_00000001_qp16.obj  --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
+		--inputModelA ${DATA}/basketball_player_00000001.obj  --inputMapA "" \
+		--inputModelB ${TMPDATA}/basketball_player_00000001_qp16.obj --inputMapB "" --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 	grep -iF "error" ${TMP}/${OUT}.txt
-	fileHasString ${TMP}/${OUT}.txt "mseF,PSNR (p2plane): 115.3" 1
+	fileHasString ${TMP}/${OUT}.txt "mseF,PSNR (p2plane): 115.2" 1
 fi
 
 OUT=compare_pcc_basket_qp16_seq
@@ -113,7 +113,7 @@ if [ "$1" == "ext" ] || [ "$1" == "$OUT" ]; then
 		 --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 	grep -iF "error" ${TMP}/${OUT}.txt
 	fileHasString ${TMP}/${OUT}.txt "mseF, PSNR(p2plane) Mean=99.99" 1
-	fileHasString ${TMP}/${OUT}.txt "c\[0\],PSNRF          Mean=72.3" 1	
+	fileHasString ${TMP}/${OUT}.txt "c\[0\],PSNRF          Mean=72.7" 1	
 fi
 
 # EOF

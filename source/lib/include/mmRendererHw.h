@@ -39,32 +39,34 @@ struct RendererHw {
   bool shutdown( void );
 
   // render a mesh to memory
-  bool render( Model*                model,
-               const Image*          map,
-               std::vector<uint8_t>& fbuffer,
-               std::vector<float>&   zbuffer,
-               const unsigned int    width,
-               const unsigned int    height,
-               const glm::vec3&      viewDir,
-               const glm::vec3&      viewUp,
-               const glm::vec3&      bboxMin,
-               const glm::vec3&      bboxMax,
-               bool                  useBBox, 
-               const bool            verbose = true );
+  bool render(
+      ModelPtr model,
+      const std::vector<mm::ImagePtr>& mapSet,
+      std::vector<uint8_t>& fbuffer,
+      std::vector<float>& zbuffer,
+      const unsigned int    width,
+      const unsigned int    height,
+      const glm::vec3& viewDir,
+      const glm::vec3& viewUp,
+      const glm::vec3& bboxMin,
+      const glm::vec3& bboxMax,
+      const bool useBBox,
+      const bool verbose = true);
 
   // render a mesh to PNG image files
-  bool render( Model*             model,
-               const Image*       map,
-               const std::string& outputImage,
-               const std::string& outputDepth,
-               const unsigned int width,
-               const unsigned int height,
-               const glm::vec3&   viewDir,
-               const glm::vec3&   viewUp,
-               const glm::vec3&   bboxMin,
-               const glm::vec3&   bboxMax,
-               bool               useBBox, 
-               const bool         verbose = true );
+  bool render(
+      ModelPtr model,
+      const std::vector<mm::ImagePtr>& mapSet,
+      const std::string& outputImage,
+      const std::string& outputDepth,
+      const unsigned int width,
+      const unsigned int height,
+      const glm::vec3& viewDir,
+      const glm::vec3& viewUp,
+      const glm::vec3& bboxMin,
+      const glm::vec3& bboxMax,
+      const bool useBBox,
+      const bool verbose = true);
 
   // clear the buffers
   void clear( std::vector<char>& fbuffer, std::vector<float>& zbuffer );

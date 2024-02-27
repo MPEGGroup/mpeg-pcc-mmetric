@@ -83,7 +83,6 @@ SET( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib )
 SET( CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib )
 SET( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 
-include( dependencies/cmake/clang-format.cmake )
 #
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/lib)
 if( ${MM_BUILD_CMD} )

@@ -146,8 +146,8 @@ do
 	if [ "$1" == "ext" ] || [ "$1" == "$OUT" ]; then
 		echo $OUT
 		$CMD compare --mode ibsm --ibsmRenderer ${renderer} \
-			--inputModelA ${DATA}/basketball_player_00000001.obj  \
-			--inputModelB ${TMPDATA}/basketball_player_00000001_qp16.obj \
+			--inputModelA ${DATA}/basketball_player_00000001.obj --inputMapA "" \
+			--inputModelB ${TMPDATA}/basketball_player_00000001_qp16.obj --inputMapB "" \
 			--outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 		grep -iF "error" ${TMP}/${OUT}.txt
 		fileHasString ${TMP}/${OUT}.txt "  ibsmRenderer = ${renderer}" 1

@@ -1,10 +1,14 @@
 
 # Compilation
 
-Download and build dependencies with following command:
-- ./build.sh 
+The build of the software as well the download and build of its dependencies 
+is performed with following command:
 
-Build software with following command:
+```
+./build.sh 
+```
+
+The following options are available:
 
 - `-h|--help  `: Display this information.
 - `-o|--ouptut`: Output build directory.
@@ -16,7 +20,7 @@ Build software with following command:
 - `--format   `: Format source code
 - `--nojobs   `: Disables multi-processor build on unix
 - `--noomp    `: Disables openmp build
-- `--nocmd    `: Disables mm software building
+- `--nocmd    `: Disables build of mm command
 
 Software can also be built manually:
 
@@ -32,7 +36,7 @@ cmake --build ./build_test/ --config Release --parallel 20
 Note: 
 - the system can read/write point clouds as obj or ply format.
 - the system can read/write meshes as obj or ply format.
-- once a file loaded the system detects a mesh by checking if any topology is avilable.
+- once a file loaded the system detects a mesh by checking if any topology is available.
 
 ## Simple commands
 
@@ -58,6 +62,42 @@ mm.exe \
     --inputMapA   mapA.png \
     --inputModelB inputB.obj \
     --inputMapB   mapB.png
+```
+
+If the models are obj files with associated material files pointing to proper texture files the inputMap parameters 
+can be omitted. The obj file can use multiple textures defined in the mtl file. The hardware renderer and any 
+hardware accelerated command using the HW renderer (such as IBSM compare) do not support multi-texturing.
+
+```
+mm.exe \
+  compare \
+    --mode        pcc \
+    --inputModelA inputA.obj \
+    --inputModelB inputB.obj \
+```
+
+Overriding the multi-textures can be performed through the command line. For instance if the model A uses originally two textures 
+defined in the mtl file, one can replace those as follows:
+
+```
+mm.exe \
+  compare \
+    --mode        pcc \
+    --inputModelA inputA.obj \
+    --inputMapA   "anotherFirstMapA.png anotherSecondMapA.png" \
+    --inputModelB inputB.obj \
+```
+
+Deactivating the use of textures can be dones by providing an empty string as parameter. The following example will systematically 
+decativate texture mapping for modelA whereas modelB will use the mtl file if any or do not use any texture map otherwise.
+
+```
+mm.exe \
+  compare \
+    --mode        pcc \
+    --inputModelA inputA.obj \
+    --inputMapA   "" \
+    --inputModelB inputB.obj \
 ```
 
 ## Commands combination
@@ -122,7 +162,7 @@ Note however that memory won't be released between sub command calls so cascadin
 ## Sequence processing
 
 Following sample demonstrates how to execute commands on a numerated sequence of objects ranging from 00150 to 00165 included. 
-The "%3d" part of the file names will be replaced by the frame number ranging from firstFrame to lastFrame, coded on 3 digits.
+The "%04d" part of the file names will be replaced by the frame number ranging from firstFrame to lastFrame, coded on 4 digits.
 
 ```
 mm.exe \

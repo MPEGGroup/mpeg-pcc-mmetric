@@ -12,6 +12,14 @@ $CMD sample -i ${DATA}/plane.obj -m ${DATA}/plane.png -o ${TMP}/${OUT}.ply --mod
 grep -iF "error" ${TMP}/${OUT}.txt
 cmp ${TMP}/${OUT}.ply ${REFS}/${OUT}.ply
 
+# perform same test using texture map defined in material file, result shall be identical
+PREV=$OUT
+OUT=sample_sdiv_plane_1_bilinear_2_2_mtl_file
+echo $OUT
+$CMD sample -i ${DATA}/plane.obj -o ${TMP}/${OUT}.ply --mode sdiv --hideProgress --bilinear --outputCsv ${STATS}  > ${TMP}/${OUT}.txt 2>&1
+grep -iF "error" ${TMP}/${OUT}.txt
+cmp ${TMP}/${OUT}.ply ${REFS}/${PREV}.ply
+
 OUT=sample_sdiv_plane_1_nearest_2_2
 echo $OUT
 $CMD sample -i ${DATA}/plane.obj -m ${DATA}/plane.png -o ${TMP}/${OUT}.ply --mode sdiv --hideProgress --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
@@ -50,10 +58,10 @@ $CMD sample -i ${DATA}/sphere.obj -o ${TMP}/${OUT}.ply --mode sdiv --hideProgres
 grep -iF "error" ${TMP}/${OUT}.txt
 # no ref (takes some space in the git)
 
-# test degenerate triangle
+# test degenerate triangle (force texture map to "" to disable)
 OUT=sample_sdiv_degenerate
 echo $OUT
-$CMD sample -i ${DATA}/degenerate.obj -o ${TMP}/${OUT}.ply --mode sdiv --hideProgress --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
+$CMD sample -i ${DATA}/degenerate.obj -m "" -o ${TMP}/${OUT}.ply --mode sdiv --hideProgress --outputCsv ${STATS} > ${TMP}/${OUT}.txt 2>&1
 grep -iF "error" ${TMP}/${OUT}.txt
 fileHasString ${TMP}/${OUT}.txt "Skipped 1 degenerate triangles" 1
 

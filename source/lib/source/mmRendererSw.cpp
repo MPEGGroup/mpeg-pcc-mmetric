@@ -52,23 +52,23 @@ bool isCullingEnabled;
 bool cwCulling;
 
 // vertex shader function
-typedef glm::vec4 ( *VertexShader )( void* data, const int iface, const int nthvert );
+typedef glm::vec4 ( *VertexShader )( void* data, int mapId, const int iface, const int nthvert );
 // vertex shader function
-typedef bool ( *FragmentShader )( void* data, const glm::vec3 bar, glm::vec4& color );
+typedef bool ( *FragmentShader )( void* data, int mapId, const glm::vec3 bar, glm::vec4& color );
 
 struct IShader {
-  const Model* model;
-  const Image* map;
+  const ModelPtr model;
+  const std::vector<ImagePtr> mapSet;
 
-  IShader( const Model* model, const Image* map ) : model( model ), map( map ) {}
+  IShader( const ModelPtr model, const std::vector<ImagePtr>& mapSet ) : model( model ), mapSet( mapSet ) {}
 };
 
 struct ShaderMap : IShader {
   glm::mat3x2 varying_uv;  // triangle uv coordinates, written by the vertex shader, read by the fragment shader
 
-  ShaderMap( const Model* model, const Image* map ) : IShader( model, map ) {}
+  ShaderMap( const ModelPtr model, const std::vector<ImagePtr>& mapSet ) : IShader( model, mapSet ) {}
 
-  static glm::vec4 vertex( void* data, const int iface, const int nthvert ) {
+  static glm::vec4 vertex( void* data, const int mapId, const int iface, const int nthvert ) {
     ShaderMap& _data = *static_cast<ShaderMap*>( data );
     // fetch uv coordinates
     _data.varying_uv = glm::column( _data.varying_uv, nthvert, _data.model->fetchUv( iface, nthvert ) );
@@ -77,13 +77,13 @@ struct ShaderMap : IShader {
     return gl_Vertex;
   }
 
-  static bool fragment( void* data, const glm::vec3 bar, glm::vec4& color ) {
+  static bool fragment( void* data, const int mapId, const glm::vec3 bar, glm::vec4& color ) {
     ShaderMap& _data = *static_cast<ShaderMap*>( data );
     // tex coord interpolation
     glm::vec2 uv = _data.varying_uv * bar;
     // texel fetch
     glm::vec3 rgb;
-    texture2D_bilinear( *_data.map, uv, rgb );  // we know map != NULL
+    texture2D_bilinear( *_data.mapSet[mapId], uv, rgb);  // we know map != NULL
     color = glm::vec4( rgb.r, rgb.g, rgb.b, 255 );
     // the pixel is not discard
     return false;
@@ -95,9 +95,9 @@ struct ShaderMapLight : IShader {
   glm::mat3x3 varying_nrm;   // normal per vertex to be interpolated by FS
   glm::mat3x3 varying_vert;  // vertex interpolation in model view
 
-  ShaderMapLight( const Model* model, const Image* map ) : IShader( model, map ) {}
+  ShaderMapLight( const ModelPtr model, const std::vector<ImagePtr>& mapSet) : IShader( model, mapSet ) {}
 
-  static glm::vec4 vertex( void* data, const int iface, const int nthvert ) {
+  static glm::vec4 vertex( void* data, const int mapId, const int iface, const int nthvert ) {
     ShaderMapLight& _data = *static_cast<ShaderMapLight*>( data );
     // fetch uv coordinates
     _data.varying_uv = glm::column( _data.varying_uv, nthvert, _data.model->fetchUv( iface, nthvert ) );
@@ -112,7 +112,7 @@ struct ShaderMapLight : IShader {
     return gl_Vertex;
   }
 
-  static bool fragment( void* data, const glm::vec3 bar, glm::vec4& color ) {
+  static bool fragment( void* data, const int mapId, const glm::vec3 bar, glm::vec4& color ) {
     ShaderMapLight& _data = *static_cast<ShaderMapLight*>( data );
     // tex coord interpolation
     glm::vec2 uv = _data.varying_uv * bar;
@@ -122,7 +122,7 @@ struct ShaderMapLight : IShader {
     glm::vec3 vert = _data.varying_vert * bar;
     // texel fetch
     glm::vec3 rgb;
-    texture2D_bilinear( *_data.map, uv, rgb );  // we know map != NULL, rgb is in 0-255 for each component
+    texture2D_bilinear( *_data.mapSet[mapId], uv, rgb );  // we know map != NULL, rgb is in 0-255 for each component
     // compute the lighting
     // ambient term
     glm::vec3 Iamb = rgb * materialAmbient;
@@ -141,9 +141,9 @@ struct ShaderMapLight : IShader {
 struct ShaderCpv : IShader {
   glm::mat3x3 varying_color;
 
-  ShaderCpv( const Model* model, const Image* map ) : IShader( model, map ) {}
+  ShaderCpv( const ModelPtr model, const std::vector<ImagePtr>& mapSet) : IShader( model, mapSet ) {}
 
-  static glm::vec4 vertex( void* data, const int iface, const int nthvert ) {
+  static glm::vec4 vertex( void* data, const int mapId, const int iface, const int nthvert ) {
     ShaderCpv& _data = *static_cast<ShaderCpv*>( data );
     // fetch per vertex colors
     _data.varying_color = glm::column( _data.varying_color, nthvert, _data.model->fetchColor( iface, nthvert ) );
@@ -152,7 +152,7 @@ struct ShaderCpv : IShader {
     return gl_Vertex;
   }
 
-  static bool fragment( void* data, const glm::vec3 bar, glm::vec4& color ) {
+  static bool fragment( void* data, const int mapId, const glm::vec3 bar, glm::vec4& color ) {
     ShaderCpv& _data = *static_cast<ShaderCpv*>( data );
     // tex coord interpolation
     color = glm::vec4( _data.varying_color * bar, 255 );
@@ -162,16 +162,16 @@ struct ShaderCpv : IShader {
 };
 
 struct ShaderRed : IShader {
-  ShaderRed( const Model* model, const Image* map ) : IShader( model, map ) {}
+  ShaderRed( const ModelPtr model, const std::vector<ImagePtr>& mapSet) : IShader( model, mapSet ) {}
 
-  static glm::vec4 vertex( void* data, const int iface, const int nthvert ) {
+  static glm::vec4 vertex( void* data, const int mapId, const int iface, const int nthvert ) {
     ShaderRed& _data = *static_cast<ShaderRed*>( data );
     // fetch and transform the vertex position
     glm::vec4 gl_Vertex = mvp * glm::vec4( _data.model->fetchPosition( iface, nthvert ), 1.0F );
     return gl_Vertex;
   }
 
-  static bool fragment( void* data, const glm::vec3 bar, glm::vec4& color ) {
+  static bool fragment( void* data, const int mapId, const glm::vec3 bar, glm::vec4& color ) {
     ShaderRed& _data = *static_cast<ShaderRed*>( data );
     // tex coord interpolation
     color = glm::vec4( 255, 0, 0, 255 );
@@ -190,7 +190,7 @@ void viewport( const int x, const int y, const int w, const int h ) {
 void rasterize( void*                 data,
                 VertexShader          vShader,
                 FragmentShader        fShader,
-                const Model*          model,
+                const ModelPtr          model,
                 std::vector<uint8_t>& fbuffer,
                 int                   width,
                 int                   height,
@@ -201,7 +201,9 @@ void rasterize( void*                 data,
     glm::vec4 clip_verts[3];
 
     // call the vertex shader for each triangle vertex
-    for ( int vertIdx = 0; vertIdx < 3; ++vertIdx ) { clip_verts[vertIdx] = vShader( data, triIdx, vertIdx ); }
+    for ( int vertIdx = 0; vertIdx < 3; ++vertIdx ) { 
+        clip_verts[vertIdx] = vShader( data, model->triangleMatIdx[triIdx], triIdx, vertIdx);
+    }
 
     // backface culling
     // only works for ortho projection
@@ -255,7 +257,7 @@ void rasterize( void*                 data,
         if ( bc_screen.x < 0 || bc_screen.y < 0 || bc_screen.z < 0 || frag_depth <= zbuffer[x + y * width] ) continue;
 
         glm::vec4 color;
-        bool      discard = fShader( data, bc_clip, color );
+        bool      discard = fShader( data, model->triangleMatIdx[triIdx], bc_clip, color );
         if ( discard ) continue;
 
         // write fragment
@@ -279,18 +281,20 @@ void RendererSw::clear( std::vector<uint8_t>& fbuffer, std::vector<float>& zbuff
   }
 }
 
-bool RendererSw::render( Model*                model,
-                         const Image*          map,
-                         std::vector<uint8_t>& fbuffer,
-                         std::vector<float>&   zbuffer,
-                         const unsigned int    width,
-                         const unsigned int    height,
-                         const glm::vec3&      viewDir,
-                         const glm::vec3&      viewUp,
-                         const glm::vec3&      bboxMin,
-                         const glm::vec3&      bboxMax,
-                         bool                  useBBox,
-                         bool                  verbose ) {
+bool RendererSw::render(
+    ModelPtr model,
+    const std::vector<ImagePtr>& mapSet,
+    std::vector<uint8_t>& fbuffer,
+    std::vector<float>& zbuffer,
+    const unsigned int    width,
+    const unsigned int    height,
+    const glm::vec3& viewDir,
+    const glm::vec3& viewUp,
+    const glm::vec3& bboxMin,
+    const glm::vec3& bboxMax,
+    bool                  useBBox,
+    bool                  verbose)
+{
   clock_t t1 = clock();
 
   glm::vec3 viewDirUnit = glm::normalize( viewDir );
@@ -380,20 +384,34 @@ bool RendererSw::render( Model*                model,
 
   clear( fbuffer, zbuffer );
 
-  if ( model->uvcoords.size() != 0 && map != NULL && map->data != NULL ) {
+  // extract the set of material IDs
+  // JEM: there is a cost in the sort method which i do not like, esp if model has many faces
+  // this shall be handled at the parsing or mesh construction, to create a set of material IDs
+  auto materialIndices = model->triangleMatIdx;
+  std::sort(materialIndices.begin(), materialIndices.end());
+  auto uniqCnt = std::unique(materialIndices.begin(), materialIndices.end());
+  materialIndices.resize(std::distance(materialIndices.begin(), uniqCnt));
+
+  // check the texture Ids and validate that there is a valid map for each Id
+  bool useTextureMaps = model->uvcoords.size() != 0; 
+  for (auto matId : materialIndices) {
+      useTextureMaps = useTextureMaps && matId < mapSet.size() && isValid( mapSet[matId] );
+  }
+
+  if (useTextureMaps) {
     if ( _isLigthingEnabled && model->normals.size() != 0 ) {
-      ShaderMapLight shader( model, map );
+      ShaderMapLight shader( model, mapSet);
       rasterize(
         &shader, ShaderMapLight::vertex, ShaderMapLight::fragment, shader.model, fbuffer, width, height, zbuffer );
     } else {
-      ShaderMap shader( model, map );
+      ShaderMap shader( model, mapSet);
       rasterize( &shader, ShaderMap::vertex, ShaderMap::fragment, shader.model, fbuffer, width, height, zbuffer );
     }
   } else if ( model->colors.size() ) {
-    ShaderCpv shader( model, NULL );
+    ShaderCpv shader( model, mapSet);
     rasterize( &shader, ShaderCpv::vertex, ShaderCpv::fragment, shader.model, fbuffer, width, height, zbuffer );
   } else {
-    ShaderRed shader( model, NULL );
+    ShaderRed shader( model, mapSet);
     rasterize( &shader, ShaderRed::vertex, ShaderRed::fragment, shader.model, fbuffer, width, height, zbuffer );
   }
 
@@ -420,25 +438,27 @@ bool RendererSw::render( Model*                model,
   return true;
 }
 
-bool RendererSw::render( Model*             model,
-                         const Image*       map,
-                         const std::string& outputImage,
-                         const std::string& outputDepth,
-                         const unsigned int width,
-                         const unsigned int height,
-                         const glm::vec3&   viewDir,
-                         const glm::vec3&   viewUp,
-                         const glm::vec3&   bboxMin,
-                         const glm::vec3&   bboxMax,
-                         bool               useBBox,
-                         const bool         verbose ) {
+bool RendererSw::render(
+    ModelPtr model,
+    const std::vector<ImagePtr>& mapSet,
+    const std::string& outputImage,
+    const std::string& outputDepth,
+    const unsigned int width,
+    const unsigned int height,
+    const glm::vec3& viewDir,
+    const glm::vec3& viewUp,
+    const glm::vec3& bboxMin,
+    const glm::vec3& bboxMax,
+    bool               useBBox,
+    const bool         verbose)
+{
   // allocate depth buffer - will be init by RendererSw::clear
   std::vector<float> zbuffer( width * height );
   // allocate frame buffer - will be init by RendererSw::clear
   std::vector<uint8_t> fbuffer( width * height * 4 );
 
   // render the model into memory buffers
-  render( model, map, fbuffer, zbuffer, width, height, viewDir, viewUp, bboxMin, bboxMax, useBBox, verbose );
+  render( model, mapSet, fbuffer, zbuffer, width, height, viewDir, viewUp, bboxMin, bboxMax, useBBox, verbose );
 
   clock_t t1 = clock();
 

@@ -216,16 +216,17 @@ bool CmdDequantize::initialize( Context* ctx, std::string app, int argc, char* a
 }
 
 bool CmdDequantize::process( uint32_t frame ) {
+  
   // the input
-  mm::Model* inputModel;
-  if ( ( inputModel = mm::IO::loadModel( _inputModelFilename ) ) == NULL ) { return false; }
+    mm::ModelPtr inputModel = mm::IO::loadModel(_inputModelFilename);
+    if (!inputModel) return false;
   if ( inputModel->vertices.size() == 0 ) {
     std::cout << "Error: invalid input model from " << _inputModelFilename << std::endl;
     return false;
   }
 
   // the output
-  mm::Model* outputModel = new mm::Model();
+  mm::ModelPtr outputModel = mm::ModelPtr( new mm::Model() );
 
   // Perform the processings
   clock_t t1 = clock();
@@ -257,11 +258,6 @@ bool CmdDequantize::process( uint32_t frame ) {
   std::cout << "Time on processing: " << ( (float)( t2 - t1 ) ) / CLOCKS_PER_SEC << " sec." << std::endl;
 
   // save the result
-  if ( mm::IO::saveModel( _outputModelFilename, outputModel ) ) return true;
-  else {
-    delete outputModel;
-    return false;
-  }
+  return mm::IO::saveModel( _outputModelFilename, outputModel );
 
-  return true;
 }

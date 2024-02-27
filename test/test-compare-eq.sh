@@ -18,12 +18,14 @@ fileHasString ${TMP}/${OUT}.txt "meshes are equal" 1
 #meshes non-manifold
 OUT=compare_equ_mesh_test_non-manifold
 echo $OUT
+echo "This test is expected to produce an error since the eq metric does not support this specific case"
 $CMD compare --mode equ --inputModelA ${DATA}/testA_non-manifold.obj --inputModelB ${DATA}/testB_non-manifold.obj > ${TMP}/${OUT}.txt 2>&1
 fileHasString ${TMP}/${OUT}.txt "meshes are not equal" 1
 
 #meshes with repeatingfaces
 OUT=compare_equ_mesh_test_repeatingfaces
 echo $OUT
+echo "This test is expected to produce an error since the eq metric does not support this specific case"
 $CMD compare --mode equ --inputModelA ${DATA}/test_inputA.obj --inputModelB ${DATA}/test_inputB.obj > ${TMP}/${OUT}.txt 2>&1
 fileHasString ${TMP}/${OUT}.txt "meshes are not equal" 1
 

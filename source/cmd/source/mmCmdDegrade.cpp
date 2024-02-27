@@ -99,15 +99,15 @@ bool CmdDegrade::initialize( Context* ctx, std::string app, int argc, char* argv
 
 bool CmdDegrade::process( uint32_t frame ) {
   // the input
-  mm::Model* inputModel = NULL;
-  if ( ( inputModel = mm::IO::loadModel( _inputModelFilename ) ) == NULL ) { return false; }
+    mm::ModelPtr inputModel = mm::IO::loadModel(_inputModelFilename);
+    if (!inputModel) return false;
   if ( inputModel->vertices.size() == 0 || inputModel->triangles.size() == 0 ) {
     std::cout << "Error: invalid input model from " << _inputModelFilename << std::endl;
     return false;
   }
 
   // the output
-  mm::Model* outputModel = new mm::Model();
+  mm::ModelPtr outputModel = mm::ModelPtr( new mm::Model() );
 
   // Perform the processings
   clock_t t1 = clock();
@@ -132,8 +132,7 @@ bool CmdDegrade::process( uint32_t frame ) {
   std::cout << "Time on processing: " << ( (float)( t2 - t1 ) ) / CLOCKS_PER_SEC << " sec." << std::endl;
 
   // save the result
-  if ( mm::IO::saveModel( _outputModelFilename, outputModel ) ) return true;
-  else return false;
+  return mm::IO::saveModel( _outputModelFilename, outputModel );
 }
 
 size_t CmdDegrade::delNthFace( const mm::Model& input, size_t nthFace, mm::Model& output ) {

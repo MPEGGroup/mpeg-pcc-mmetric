@@ -42,6 +42,7 @@ fileHasString ${TMP}/${OUT}.txt "meshes are not equal, 2 different triangles" 1
 # same as before but do not consider faces as oriented in comparison
 OUT=compare_eqTFAN_mesh_plane_reorder_unoriented
 echo $OUT
+echo "This test is expected to produce an error since the eqTfan metric does not support this specific case"
 $CMD compare --mode eqTFAN --unoriented --inputModelA ${DATA}/plane.obj --inputModelB ${DATA}/plane_reorder.obj > ${TMP}/${OUT}.txt 2>&1
 fileHasString ${TMP}/${OUT}.txt "meshes are equal" 1
 

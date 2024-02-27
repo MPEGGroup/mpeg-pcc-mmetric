@@ -75,7 +75,7 @@ bool CmdAnalyse::initialize( Context* context, std::string app, int argc, char* 
     if ( result.count( "inputModel" ) ) _inputModelFilename = result["inputModel"].as<std::string>();
     // Optional
     if ( result.count( "inputMap" ) ) { 
-        splitString( result["inputMap"].as<std::string>(), _inputTextureFilenames ); 
+        parseStringList( result["inputMap"].as<std::string>(), _inputTextureFilenames ); 
     }
     // Optional
     if ( result.count( "outputCsv" ) ) _outputCsvFilename = result["outputCsv"].as<std::string>();
@@ -92,20 +92,24 @@ bool CmdAnalyse::initialize( Context* context, std::string app, int argc, char* 
 bool CmdAnalyse::process( uint32_t frame ) {
 
   // the input
-  mm::Model* inputModel = NULL;
-  if ( _inputModelFilename != "" ) {
-    if ( ( inputModel = mm::IO::loadModel( _inputModelFilename ) ) == NULL ) { 
-        return false; 
-    }
-  }
+  mm::ModelPtr inputModel = mm::IO::loadModel(_inputModelFilename);
+  if (!inputModel) { return false; }
 
   // now handle the textures
-  std::vector<std::string> textureMapUrls =
-    _inputTextureFilenames.size() != 0 ? _inputTextureFilenames : inputModel->textureMapUrls;
-  std::vector<mm::Image*> textureMapList;
+  std::vector<std::string> textureMapUrls;
+  if (_inputTextureFilenames.size() != 0)
+      textureMapUrls = _inputTextureFilenames;
+  else
+      textureMapUrls = inputModel->textureMapUrls;
 
-  // does nothing if lists are empty
-  mm::IO::loadImages( textureMapUrls, textureMapList ); 
+  std::vector<mm::ImagePtr> textureMapList;
+  mm::IO::loadImages(textureMapUrls, textureMapList);
+  bool mustFreeDummyImage = false;
+  if (textureMapList.empty()) {
+      std::cout << "Skipping map read, will parse/use vertex color if any" << std::endl;
+      textureMapList.push_back(mm::ImagePtr(new mm::Image()));
+      textureMapUrls.push_back(""); // no url for this invalid map
+  }
 
   // create or open in append mode output csv if needed
   std::ofstream fout;
