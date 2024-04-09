@@ -278,7 +278,7 @@ mm.exe \
 # Command references 
 ```
 
-3D model processing commands v1.1.4
+3D model processing commands v1.1.5
 Usage:
   mm.exe command [OPTION...]
 
@@ -753,10 +753,6 @@ Author: jean-eudes.marvie@interdigital.com
 	doi = {10.1007/s41233-023-00057-4}
 }
 ```
-
-# Contacts
-
-Jean-Eudes Marvie (jean-eudes.marvie (at) interdigital.com)
 
 # Feedback
 

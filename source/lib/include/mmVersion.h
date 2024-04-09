@@ -20,6 +20,6 @@
 #define _MM_VERSION_H_
 
 // software version
-#define MM_VERSION "1.1.4"
+#define MM_VERSION "1.1.5"
 
 #endif

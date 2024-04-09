@@ -13,10 +13,6 @@
 }
 ```
 
-# Contacts
-
-Jean-Eudes Marvie (jean-eudes.marvie (at) interdigital.com)
-
 # Feedback
 
 For documented and repeatable bugs, feature requests, etc., please use the [Gitlab](https://git.mpeg.expert/MPEG/3dgh/v-pcc/software/mpeg-pcc-mmetric/-/issues) issues.

@@ -5,14 +5,30 @@ Primary author Jean-Eudes Marvie (InterDigital).
 
 Additional contributors mentioned per version or item hereafter.
 
-## Version 1_1_4
+## Version 1.1.5
+
+- Add: m65891 - general support for multi-textures
+	- support in renderer, sample, compare, and other commands
+	- use shared pointers for better memory management of models and images
+	- add tests for multi-texture in test-render.sh
+	- update documentation on texture and multi-texture usage
+	- add tests for filenames validity in test-analyse.sh
+	- update extended test suite to match modifications of m65867
+	- Contributor: J.E. Marvie (InterDigital)
+- Add: m65891 - preliminary support for multi-textures
+	- Contributor: Danillo Graziosi (Sony), J.E. Marvie (InterDigital)
+- Fix: m66389 - handle special non manifold case
+	- Contributor: Wenjie Zou (Xidian University)
+- Add: m65878 Improving obj files IOs in the mmetric software
+
+## Version 1.1.4
 
 - Add: eqTFAN lossless metric 
   - Contributor: Wenjie Zou (Xidian University)
 - Fix: step size processing in meshToPcGrid (m65548)
 - Fix: update mpeg dmetric path to new location in cmake file
 
-## Version 1_1_3
+## Version 1.1.3
 
 - Fix: clip PSNR values to 100 (m62632)
   - the maximal PSNR value is set to 99.99
@@ -25,7 +41,7 @@ Additional contributors mentioned per version or item hereafter.
   - the proposed face ordering fix when reindexing could be explicitly triggered using additional options/flags
   - Contributor: Olivier Mocquard (InterDigital)
 
-## Version 1_1_2
+## Version 1.1.2
 
 Contributor: Julien Ricard (Interdigital)
 
