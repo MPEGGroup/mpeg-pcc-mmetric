@@ -5,6 +5,10 @@ Primary author Jean-Eudes Marvie (InterDigital).
 
 Additional contributors mentioned per version or item hereafter.
 
+## Version 1.1.6
+
+Fix: compare --mode eq bad texture map test in multi-texture mode
+
 ## Version 1.1.5
 
 - Add: m65891 - general support for multi-textures
