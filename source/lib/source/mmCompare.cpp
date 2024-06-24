@@ -293,36 +293,39 @@ int Compare::eqTFAN(mm::Model& inputA,
     bool             earlyReturn,
     bool             unoriented,
     mm::Model& outputA,
-    mm::Model& outputB) {
+    mm::Model& outputB)
+{
     // we test the maps
     if (mapSetA.size() != mapSetB.size()) {
-        std::cout << "texture map sets are not of equal size" << std::endl;
+        std::cout << "texture maps are not of equal: size of set A is diffrent from size of set B" << std::endl;
     }
     else if (mapSetA.size() == 0) {
         std::cout << "skipping texture maps comparison" << std::endl;
     }
     else {
         for (auto mapIdx = 0; mapIdx < mapSetA.size(); mapIdx++) {
-            const auto& mapA = *(mapSetA[mapIdx]);
-            const auto& mapB = *(mapSetB[mapIdx]);
-            if (mapA.data != NULL || mapB.data != NULL) {
-                if (mapA.data == NULL) {
+            const auto& mapA = mapSetA[mapIdx];
+            const auto& mapB = mapSetB[mapIdx];
+            const bool isMapAValid = isValid(mapA);
+            const bool isMapBValid = isValid(mapB);
+            if (isMapAValid || isMapBValid) {
+                if (!isMapAValid) {
                     std::cout << "texture maps are not equal: mapA is null" << std::endl;
                 }
-                else if (mapB.data == NULL) {
+                else if (!isMapBValid) {
                     std::cout << "texture maps are not equal: mapB is null" << std::endl;
                 }
                 else {
-                    if (mapA.width != mapB.width || mapA.height != mapB.height) {
+                    if (mapA->width != mapB->width || mapA->height != mapB->height) {
                         std::cout << "texture maps are not equal: dimensions are not equal" << std::endl;
                     }
                     else {
                         size_t diffs = 0;
-                        for (size_t row = 0; row < mapA.height; ++row) {
-                            for (size_t col = 0; col < mapA.width; ++col) {
+                        for (size_t row = 0; row < mapA->height; ++row) {
+                            for (size_t col = 0; col < mapA->width; ++col) {
                                 glm::vec3 colA, colB;
-                                mapA.fetchRGB(col, row, colA);
-                                mapB.fetchRGB(col, row, colB);
+                                mapA->fetchRGB(col, row, colA);
+                                mapB->fetchRGB(col, row, colB);
                                 if (colA != colB) ++diffs;
                             }
                         }
