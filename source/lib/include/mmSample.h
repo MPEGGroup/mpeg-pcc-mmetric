@@ -66,7 +66,8 @@ namespace mm {
             bool         useFixedPoint,
             glm::vec3& minPos,
             glm::vec3& maxPos,
-            const bool   verbose = true);
+            const bool   verbose = true,
+            std::vector<int>* faceIndexPerPoint = nullptr);
 
         // will sample the mesh on a grid basis of resolution gridRes, result will be generated as float or integer
         // system will search the resolution according to the nbSamplesMin and nbSamplesMax parameters

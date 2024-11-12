@@ -783,7 +783,8 @@ void convertModel(
     const mm::Model&         inputModel,
     pcc_quality::commandPar& params,
     PccPointCloud&           outputModel,
-    const bool               verbose ) 
+    const bool               verbose,
+    const bool               removeDupPoint = true)
 {
   for ( size_t i = 0; i < inputModel.vertices.size() / 3; ++i ) {
     // push the positions
@@ -810,7 +811,8 @@ void convertModel(
 
   outputModel.xyz.nbdup.resize( outputModel.xyz.p.size() );
   std::fill( outputModel.xyz.nbdup.begin(), outputModel.xyz.nbdup.end(), 1 );
-  removeDuplicatePoints( outputModel, params.dropDuplicates, params.neighborsProc, verbose );
+  if (removeDupPoint)
+      removeDuplicatePoints( outputModel, params.dropDuplicates, params.neighborsProc, verbose );
 }
 
 int Compare::pcc(
@@ -821,7 +823,10 @@ int Compare::pcc(
     pcc_quality::commandPar& params,
     mm::Model& outputA,
     mm::Model& outputB,
-    const bool verbose)
+    const bool verbose,
+    const bool removeDupA,
+    const bool removeDupB,
+    const bool calcMetPerPoint)
 {
   // 1 - sample the models if needed
   sampleIfNeeded( modelA, mapSetA, outputA );
@@ -831,8 +836,8 @@ int Compare::pcc(
   pcc_processing::PccPointCloud inCloud1;
   pcc_processing::PccPointCloud inCloud2;
 
-  convertModel( outputA, params, inCloud1, verbose );
-  convertModel( outputB, params, inCloud2, verbose );
+  convertModel( outputA, params, inCloud1, verbose, removeDupA );
+  convertModel( outputB, params, inCloud2, verbose, removeDupB );
 
   // we use outputA as reference for signal dynamic if needed
   if ( params.resolution == 0 ) {
@@ -856,7 +861,17 @@ int Compare::pcc(
   // 3 - compute the metric
   pcc_quality::qMetric qm;
   const double         similarPointThreshold = 1e-20;
-  computeQualityMetric( inCloud1, inCloud1, inCloud2, params, qm, verbose, similarPointThreshold );
+  
+  if (calcMetPerPoint) {
+      std::vector <pcc_quality::qMetric> qm_pointA(inCloud1.size);
+      std::vector <pcc_quality::qMetric> qm_pointB(inCloud2.size);
+      computeQualityMetric(inCloud1, inCloud1, inCloud2, params, qm, verbose, similarPointThreshold, &qm_pointA, &qm_pointB);
+      _pccResultsPerPoint[0].push_back(std::make_pair((uint32_t)_pccResultsPerPoint[0].size(), qm_pointA));
+      _pccResultsPerPoint[1].push_back(std::make_pair((uint32_t)_pccResultsPerPoint[1].size(), qm_pointB));
+  }
+  else {
+      computeQualityMetric(inCloud1, inCloud1, inCloud2, params, qm, verbose, similarPointThreshold);
+  }
 
   // store results to compute statistics in finalize step
   _pccResults.push_back( std::make_pair( (uint32_t)_pccResults.size(), qm ) );
@@ -1407,6 +1422,42 @@ std::vector<double> Compare::getPccResults( const size_t index ) {
   return results;
 }
 
+std::vector<double> Compare::getPccResultsPerPoint(const int abIndex, const size_t index, const size_t pointIndex) {
+    std::vector<double> results;
+    results.resize(10, 0.0);
+    if (index < _pccResultsPerPoint[abIndex].size()) {
+        results[0] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].c2c_psnr);
+        results[1] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].c2p_psnr);
+        results[2] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_psnr[0]);
+        results[3] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_psnr[1]);
+        results[4] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_psnr[2]);
+        results[5] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].c2c_hausdorff_psnr);
+        results[6] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].c2p_hausdorff_psnr);
+        results[7] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_rgb_hausdorff_psnr[0]);
+        results[8] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_rgb_hausdorff_psnr[1]);
+        results[9] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_rgb_hausdorff_psnr[2]);
+    }
+    return results;
+}
+
+std::vector<double> Compare::getPccResultsPerPointMse(const int abIndex, const size_t index, const size_t pointIndex) {
+    std::vector<double> results;
+    results.resize(10, 0.0);
+    if (index < _pccResultsPerPoint[abIndex].size()) {
+        results[0] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].c2c_mse);
+        results[1] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].c2p_mse);
+        results[2] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_mse[0]);
+        results[3] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_mse[1]);
+        results[4] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_mse[2]);
+        results[5] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].c2c_hausdorff);
+        results[6] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].c2p_hausdorff);
+        results[7] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_rgb_hausdorff[0]);
+        results[8] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_rgb_hausdorff[1]);
+        results[9] = (std::min)(CLIP, _pccResultsPerPoint[abIndex][index].second[pointIndex].color_rgb_hausdorff[2]);
+    }
+    return results;
+}
+
 std::vector<double> Compare::getFinalPccResults() {
   auto results = getPccResults( _pccResults.size() );
   if ( _pccResults.size() > 0 ) {
@@ -1439,6 +1490,42 @@ std::vector<double> Compare::getFinalPcqmResults() {
     for ( auto& v : results ) v /= (double)_pcqmResults.size();
   }
   return results;
+}
+
+std::vector<std::vector<double>> Compare::getPccResultsPerPoint(const int abIndex) {
+    std::vector<std::vector<double>> resultPerPoints;
+    if (_pccResultsPerPoint[abIndex].size() > 0) {
+        long pointCount = _pccResultsPerPoint[abIndex][0].second.size();
+        resultPerPoints.resize(pointCount);
+        for (long pi = 0; pi < pointCount; ++pi) {
+            auto results = getPccResultsPerPoint(abIndex, _pccResultsPerPoint[abIndex].size(), pi);
+            for (size_t i = 0; i < _pccResultsPerPoint[abIndex].size(); i++) {
+                const auto element = getPccResultsPerPoint(abIndex, i, pi);
+                for (size_t j = 0; j < results.size(); j++) results[j] += element[j];
+            }
+            for (auto& v : results) v /= (double)_pccResultsPerPoint[abIndex].size();
+            //resultPerPoints.push_back(results);
+            resultPerPoints[pi] = results;
+        }
+    }
+    return resultPerPoints;
+}
+
+std::vector<std::vector<double>> Compare::getPccResultsPerPointMse(const int abIndex) {
+    std::vector < std::vector<double>> resultPerPoints;
+    if (_pccResultsPerPoint[abIndex].size() > 0) {
+        long pointCount = _pccResultsPerPoint[abIndex][0].second.size();
+        for (long pi = 0; pi < pointCount; ++pi) {
+            auto results = getPccResultsPerPointMse(abIndex, _pccResultsPerPoint[abIndex].size(), pi);
+            for (size_t i = 0; i < _pccResultsPerPoint[abIndex].size(); i++) {
+                const auto element = getPccResultsPerPointMse(abIndex, i, pi);
+                for (size_t j = 0; j < results.size(); j++) results[j] += element[j];
+            }
+            for (auto& v : results) v /= (double)_pccResultsPerPoint[abIndex].size();
+            resultPerPoints.push_back(results);
+        }
+    }
+    return resultPerPoints;
 }
 
 std::vector<double> Compare::getIbsmResults( const size_t index ) {

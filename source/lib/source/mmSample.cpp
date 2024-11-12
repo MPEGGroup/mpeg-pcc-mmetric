@@ -197,7 +197,8 @@ void Sample::meshToPcGrid(
     bool         useFixedPoint,
     glm::vec3& minPos,
     glm::vec3& maxPos,
-    const bool   verbose)
+    const bool   verbose,
+    std::vector<int>* faceIndexPerPoint )
 {
   // computes the bounding box of the vertices
   glm::vec3     minBox       = minPos;
@@ -261,6 +262,8 @@ void Sample::meshToPcGrid(
 
   size_t skipped = 0;  // number of degenerate triangles
 
+  std::vector<int> faceIndexPerPointVec;
+  size_t foundCountPrev = builder.foundCount;
   // for each triangle
   for ( size_t triIdx = 0; triIdx < input.triangles.size() / 3; ++triIdx ) {
       
@@ -388,12 +391,23 @@ void Sample::meshToPcGrid(
             }
 
             // add the vertex
-            builder.pushVertex( v );
+            //builder.pushVertex( v );
+            size_t newIndex = builder.pushVertex(v);
+
+            if (faceIndexPerPoint != nullptr) {
+                if (foundCountPrev == builder.foundCount) {
+                    faceIndexPerPointVec.push_back(triIdx);
+                }
+                else {
+                    foundCountPrev = builder.foundCount;
+                }
+            }
           }
         }
       }
     }
   }
+  if( faceIndexPerPoint != nullptr ) *faceIndexPerPoint = faceIndexPerPointVec;
   if ( logProgress ) std::cout << std::endl;
   if ( verbose ) {
     if ( skipped != 0 ) std::cout << "Skipped " << skipped << " degenerate triangles" << std::endl;

@@ -52,6 +52,9 @@ namespace mm {
         // Raster results array of <frame, result>
         std::vector<std::pair<uint32_t, IbsmResults> > _ibsmResults;
 
+        //per Point
+        std::vector<std::pair<uint32_t, std::vector<pcc_quality::qMetric>>> _pccResultsPerPoint[2];
+
         // Renderers for the ibsm metric
         mm::RendererSw _swRenderer;             // the Software renderer
         mm::RendererHw _hwRenderer;             // the Hardware renderer
@@ -72,6 +75,11 @@ namespace mm {
         std::vector<double> getPccResults(const size_t index);
         std::vector<double> getPcqmResults(const size_t index);
         std::vector<double> getIbsmResults(const size_t index);
+
+        std::vector <std::vector<double>> getPccResultsPerPoint(const int abIndex);
+        std::vector <std::vector<double>> getPccResultsPerPointMse(const int abIndex);
+        std::vector<double> getPccResultsPerPoint(const int abIndex, const size_t index, const size_t pointIndex);
+        std::vector<double> getPccResultsPerPointMse(const int abIndex, const size_t index, const size_t pointIndex);
 
         // compare two meshes for equality (using mem comp if epsilon = 0)
         // if epsilon = 0, return 0 on success and 1 on difference
@@ -125,7 +133,10 @@ namespace mm {
             pcc_quality::commandPar& params,
             mm::Model& outputA,
             mm::Model& outputB,
-            const bool verbose = true);
+            const bool verbose = true,
+            const bool removeDupA = true,
+            const bool removeDupB = true,
+            const bool calcMetPerPoint = false);
 
         // collect statics over sequence and compute results
         void pccFinalize(void);
