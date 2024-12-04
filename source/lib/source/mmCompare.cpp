@@ -853,7 +853,7 @@ int Compare::pcc(
   params.file2 = "dummy2.ply";  // could be any name !="", just force some pcc inner tests to pass
   // compute plane metric if we have valid normal arrays
   params.c2c_only =
-    !( outputA.normals.size() == outputA.vertices.size() && outputB.normals.size() == outputB.vertices.size() );
+    !( outputA.normals.size() == outputA.vertices.size() /* && outputB.normals.size() == outputB.vertices.size() */ ); // normals computed from A if not defined for B
   // compute color metric if valid color arrays (no support for RGBA colors)
   params.bColor =
     params.bColor
