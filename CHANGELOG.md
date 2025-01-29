@@ -5,6 +5,23 @@ Primary author Jean-Eudes Marvie (InterDigital).
 
 Additional contributors mentioned per version or item hereafter.
 
+## Version 1.1.7
+
+- Fix: update licence, headers, dmetric build
+  - update licence information, related headers
+  - update dmetric build scripts
+  - Contributor: InterDigital
+- Fix: m70998 - enable D2 computation when model B has no normals defined
+  - enabled for V-PCC metrics evaluation, where decoded has no normal information
+  - Contributor: Celine Guede (InterDigital)
+- Fix: compare --mode eqTFAN and gcc 8.5 build
+  - Contributor: InterDigital
+- Add: m69466 - metric per face
+  - Allow to skip removeDuplicatePoint in “convertModel” function
+  - Obtain point to face correspondence when sampling a model in “meshToPcGrid” function
+  - Get metric results for each point from dmetric
+  - Contributor: Kao Hayashi (Sony)
+
 ## Version 1.1.6
 
 Fix: compare --mode eq bad texture map test in multi-texture mode
